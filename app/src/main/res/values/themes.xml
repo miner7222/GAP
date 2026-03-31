@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.LSRXposed" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/lsr_primary</item>
+        <item name="colorPrimaryVariant">@color/lsr_primary_dark</item>
+        <item name="colorSecondary">@color/lsr_secondary</item>
+        <item name="colorSurface">@color/lsr_surface</item>
+        <item name="android:colorBackground">@color/lsr_surface</item>
+        <item name="colorOnSurface">@color/lsr_on_surface</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/lsr_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

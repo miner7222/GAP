@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git log:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:javadoc.io)",
+      "WebFetch(domain:repo1.maven.org)",
+      "WebSearch",
+      "WebFetch(domain:libxposed.github.io)",
+      "Bash(git show:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(cd /tmp)",
+      "Bash(curl -s \"https://api.github.com/repos/libxposed/api/pulls/51\")",
+      "WebFetch(domain:patch-diff.githubusercontent.com)",
+      "Bash(find /d/Git/DeZUXposed -name build.gradle* -type f)",
+      "Bash(curl -s \"https://api.github.com/repos/libxposed/api/pulls/51/files\")",
+      "WebFetch(domain:api.github.com)",
+      "Bash(curl -s https://raw.githubusercontent.com/libxposed/api/0d7f41e1f9669d9daa7a1303bedecfd69e256f53/api/src/main/java/io/github/libxposed/api/XposedModuleInterface.java)",
+      "Bash(curl:*)",
+      "Bash(git -C \"D:/Git/DeZUXposed\" diff)",
+      "Bash(git -C \"D:/Git/DeZUXposed\" status)",
+      "Bash(git -C \"D:/Git/DeZUXposed\" log --oneline -3)",
+      "Bash(git -C \"D:/Git/DeZUXposed\" add app/src/main/java/io/github/miner7222/dezux/MainHook.kt)",
+      "Bash(git -C:*)"
+    ]
+  }
+}
