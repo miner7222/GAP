@@ -18,8 +18,8 @@ On **`baldur`**, the module leaves the stock Lenovo `lenovosr` path alone and on
 ## Requirements
 
 1. **Root**
-2. **LSPosed**
-3. **LSRPort**
+2. **[LSPosed](https://github.com/JingMatrix/Vector)**
+3. **[LSRPort](https://gitlab.com/miner7222/lsrport)**
 
 ---
 
