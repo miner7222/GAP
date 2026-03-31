@@ -1,0 +1,7 @@
+<resources>
+    <color name="lsr_primary">#2056D6</color>
+    <color name="lsr_primary_dark">#173FA4</color>
+    <color name="lsr_secondary">#1E293B</color>
+    <color name="lsr_surface">#F6F8FB</color>
+    <color name="lsr_on_surface">#0F172A</color>
+</resources>

@@ -1,0 +1,20 @@
+<resources>
+    <string name="module_description">비-baldur 기기에서는 system_server에 Lenovo LSR 호환 서비스를 주입하고, GAP에서 활성 GPP 화이트리스트를 관리합니다.</string>
+    <string name="package_manager_description">LSR 화이트리스트에 유지할 패키지를 직접 선택하세요. 저장하면 런타임용 gpp_app_list 오버레이를 갱신하고 gppservice를 재시작한 뒤 ZuiGameHelper를 강제 종료해서 변경 사항이 바로 반영되게 합니다.</string>
+    <string name="search_hint">패키지 검색</string>
+    <string name="save_button">저장</string>
+    <string name="reset_button">기기 기본값으로 복원</string>
+    <string name="selection_summary">%1$d개 선택됨 · 기기 기본값 %2$d개</string>
+    <string name="package_name_not_installed">%1$s · 현재 설치되지 않음</string>
+    <string name="save_success_custom">커스텀 화이트리스트를 저장하고 gppservice를 재시작했습니다. ZuiGameHelper도 강제 종료했습니다.</string>
+    <string name="save_success_default">기기 기본 화이트리스트로 되돌리고 gppservice를 재시작했습니다. ZuiGameHelper도 강제 종료했습니다.</string>
+    <string name="save_failed_message">화이트리스트를 저장하지 못했습니다: %1$s</string>
+    <string name="load_failed_message">패키지 목록을 불러오지 못했습니다: %1$s</string>
+    <string name="no_results">검색 조건에 맞는 패키지가 없습니다.</string>
+    <string name="filters_menu">필터</string>
+    <string name="show_not_installed_packages">설치되지 않은 패키지 표시</string>
+    <string name="root_required_title">루트 권한 필요</string>
+    <string name="root_required_message">저장 즉시 변경 사항을 반영하려면 GAP이 실행될 때 루트 권한이 필요합니다. 루트 권한을 허용한 뒤 다시 시도하세요.</string>
+    <string name="retry_button">다시 시도</string>
+    <string name="close_button">닫기</string>
+</resources>

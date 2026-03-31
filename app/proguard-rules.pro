@@ -1,0 +1,3 @@
+-keep class io.github.miner7222.lsr.** { *; }
+-keep class zui.lsr.** { *; }
+-keep class com.zui.server.lsr.** { *; }
