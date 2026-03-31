@@ -46,7 +46,7 @@ jobs:
       - name: Decode Keystore
         shell: bash
         run: |
-          echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > release-keystore.jks
+          echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > app/release-keystore.jks
 
       - name: Setup Gradle Cache
         uses: gradle/actions/setup-gradle@v5
@@ -82,4 +82,4 @@ jobs:
       - name: Cleanup keystore
         if: ${{ always() }}
         shell: bash
-        run: rm -f release-keystore.jks
+        run: rm -f app/release-keystore.jks
