@@ -6,8 +6,8 @@
     <string name="reset_button">기기 기본값으로 복원</string>
     <string name="selection_summary">%1$d개 선택됨 · 기기 기본값 %2$d개</string>
     <string name="package_name_not_installed">%1$s · 현재 설치되지 않음</string>
-    <string name="save_success_custom">커스텀 화이트리스트를 저장하고 gppservice를 재시작했습니다. ZuiGameHelper도 강제 종료했습니다.</string>
-    <string name="save_success_default">기기 기본 화이트리스트로 되돌리고 gppservice를 재시작했습니다. ZuiGameHelper도 강제 종료했습니다.</string>
+    <string name="save_success_custom">서비스 재시작됨</string>
+    <string name="save_success_default">서비스 재시작됨</string>
     <string name="save_failed_message">화이트리스트를 저장하지 못했습니다: %1$s</string>
     <string name="load_failed_message">패키지 목록을 불러오지 못했습니다: %1$s</string>
     <string name="no_results">검색 조건에 맞는 패키지가 없습니다.</string>

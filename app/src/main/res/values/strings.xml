@@ -8,8 +8,8 @@
     <string name="reset_button">Reset to Device Default</string>
     <string name="selection_summary">%1$d packages selected · device default %2$d</string>
     <string name="package_name_not_installed">%1$s · not currently installed</string>
-    <string name="save_success_custom">Saved custom whitelist and restarted gppservice. ZuiGameHelper was force-stopped.</string>
-    <string name="save_success_default">Restored the device default whitelist and restarted gppservice. ZuiGameHelper was force-stopped.</string>
+    <string name="save_success_custom">Services restarted.</string>
+    <string name="save_success_default">Services restarted.</string>
     <string name="save_failed_message">Could not save the whitelist: %1$s</string>
     <string name="load_failed_message">Could not load packages: %1$s</string>
     <string name="no_results">No packages match the current search or visibility filter.</string>
