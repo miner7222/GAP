@@ -1,5 +1,5 @@
 <resources>
-    <string name="module_description">비-baldur 기기에서는 system_server에 Lenovo LSR 호환 서비스를 주입하고, GAP에서 활성 GPP 화이트리스트를 관리합니다.</string>
+    <string name="module_description">레노버 게임 어시스턴트에 추가 기능을 제공하는 모듈입니다.</string>
     <string name="package_manager_description">LSR 화이트리스트에 유지할 패키지를 직접 선택하세요. 저장하면 런타임용 gpp_app_list 오버레이를 갱신하고 gppservice를 재시작한 뒤 ZuiGameHelper를 강제 종료해서 변경 사항이 바로 반영되게 합니다.</string>
     <string name="search_hint">패키지 검색</string>
     <string name="save_button">저장</string>

@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name" translatable="false">GAP</string>
     <string name="app_subtitle" translatable="false">Game Assistant Plus</string>
-    <string name="module_description">Game Assistant Plus injects Lenovo LSR compatibility on non-baldur boards and controls the active GPP whitelist.</string>
+    <string name="module_description">Provides extra features for Lenovo Game Assistant.</string>
     <string name="package_manager_description">Select the packages that should stay in the active LSR whitelist. GAP asks for root on launch because saving rewrites gpp_app_list, restarts gppservice, and force-stops ZuiGameHelper so the change takes effect immediately.</string>
     <string name="search_hint">Search packages</string>
     <string name="save_button">Save</string>
