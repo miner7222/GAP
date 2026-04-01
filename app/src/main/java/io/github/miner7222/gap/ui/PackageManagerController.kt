@@ -30,11 +30,25 @@ object PackageManagerController {
         // return to stock behavior even after the active list has been overridden.
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.getStringSet(PREF_BASELINE_PACKAGES, null)?.let { stored ->
-            return LinkedHashSet(stored)
+            if (stored.isNotEmpty()) {
+                return LinkedHashSet(stored)
+            }
         }
 
-        val baseline = SupportedPackageList.readActivePackages()
-        prefs.edit().putStringSet(PREF_BASELINE_PACKAGES, baseline).apply()
+        // Older builds could cache an empty baseline when the app-side direct
+        // file read hit a bind-mounted/root-owned whitelist. Repair that state
+        // by re-reading the active list through root. If a runtime override is
+        // currently active, use the result for display only and wait for a
+        // stock run before persisting it as the device default.
+        val baseline = readSelectedPackages()
+        if (baseline.isEmpty()) {
+            prefs.edit().remove(PREF_BASELINE_PACKAGES).apply()
+            return emptySet()
+        }
+
+        if (!hasRuntimeOverride()) {
+            prefs.edit().putStringSet(PREF_BASELINE_PACKAGES, baseline).apply()
+        }
         return baseline
     }
 
@@ -115,6 +129,27 @@ object PackageManagerController {
             )
         }
         return SupportedPackageList.parsePackages(result.output)
+    }
+
+    private fun hasRuntimeOverride(): Boolean {
+        val result = RootShell.run(
+            """
+            SETTINGS_LIST=$(settings get global '${SupportedPackageList.RUNTIME_SETTINGS_KEY}' 2>/dev/null || true)
+            if [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ] || \
+               [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ] || \
+               { [ "${'$'}SETTINGS_LIST" != "null" ] && [ -n "${'$'}SETTINGS_LIST" ]; }; then
+              echo 1
+            else
+              echo 0
+            fi
+            """.trimIndent(),
+        )
+        if (result.exitCode != 0) {
+            throw IllegalStateException(
+                result.output.ifBlank { "Could not determine runtime whitelist state (exit ${result.exitCode})" },
+            )
+        }
+        return result.output.lineSequence().lastOrNull()?.trim() == "1"
     }
 
     fun saveSelection(context: Context, selectedPackages: Set<String>): SavePackagesResult {
