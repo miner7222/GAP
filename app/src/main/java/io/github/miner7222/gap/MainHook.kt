@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.content.res.Resources
 import android.graphics.drawable.Drawable
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
@@ -32,6 +33,9 @@ class MainHook : IYukiHookXposedInit {
     private companion object {
         private const val GAME_HELPER_PACKAGE = "com.zui.game.service"
         private const val SUPER_RESOLUTION_FEATURE_KEY = "key_super_resolution"
+        private const val AI_SOUND_SETTING_KEY = "key_game_aisound"
+        private const val AI_SOUND_PARAMETER_ENABLED = "aisound=true"
+        private const val AI_SOUND_PARAMETER_DISABLED = "aisound=false"
         private const val COLORFUL_LIGHT_FEATURE_KEY = "key_colorful_light"
         private const val GAME_RESOLUTION_APPS_ARRAY = "game_resolution_apps"
         private const val DEFAULT_SUPER_RESOLUTION_ARRAY_FLAGS = "#1#1"
@@ -42,6 +46,14 @@ class MainHook : IYukiHookXposedInit {
         private const val GAME_HELPER_SETTINGS_ICON_RES = "ic_game_assistant_svg"
         private const val GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY = "option_item_colorful_light"
         private const val SETTINGS_ICON_META_KEY = "com.android.settings.icon"
+        private val AI_SOUND_SUPPORTED_PACKAGES = linkedSetOf(
+            "com.tencent.ig",
+            "com.tencent.tmgp.pubgmhd",
+            "com.rekoo.pubgm",
+            "com.pubg.krmobile",
+            "com.vng.pubgmobile",
+            "com.pubg.imobile",
+        )
     }
 
     private val systemHooksInstalled = AtomicBoolean(false)
@@ -172,6 +184,9 @@ class MainHook : IYukiHookXposedInit {
         installSuperResolutionAvailabilityHooks()
         // Replace the stock SR whitelist lookups with the active gpp_app_list view.
         installSuperResolutionSupportHooks()
+        // Normalize AI sound package gating so both PUBG package names work
+        // regardless of the device's ROW region flag.
+        installAiSoundEnhancementHooks()
 
         AndroidInternals.log("Installed YukiHook game helper hooks")
     }
@@ -554,6 +569,114 @@ class MainHook : IYukiHookXposedInit {
         )
     }
 
+    private fun PackageParam.installAiSoundEnhancementHooks() {
+        hookAiSoundItemInitialization()
+        hookAiSoundToggleHandler()
+        hookAiSoundFloatingNotice()
+    }
+
+    private fun PackageParam.hookAiSoundItemInitialization() {
+        val className = "com.zui.game.service.sys.item.ItemAISoundEnhancement"
+        val methodName = "initFromSavedState"
+        if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
+            AndroidInternals.log("Skip missing $className#$methodName/2 in Game Helper")
+            return
+        }
+
+        findClass(className).hook {
+            injectMember {
+                method {
+                    name = methodName
+                    paramCount = 2
+                }
+                afterHook {
+                    val context = args.firstOrNull() as? Context ?: return@afterHook
+                    val packageName = args.getOrNull(1) as? String ?: return@afterHook
+                    if (!isAiSoundSupportedPackage(packageName)) return@afterHook
+
+                    val enabled = readAiSoundSetting(context, defaultValue = 1) == 1
+                    applyAiSoundState(instanceOrNull, context, enabled)
+                    result = if (enabled) 0 else 1
+                }
+            }
+        }
+    }
+
+    private fun PackageParam.hookAiSoundToggleHandler() {
+        val className = "com.zui.game.service.sys.item.ItemAISoundEnhancement\$initFromSavedState\$1"
+        if (!hasMethodWithParamCount(className, "onNoClick", 0, appClassLoader)) {
+            AndroidInternals.log("Skip missing $className#onNoClick/0 in Game Helper")
+            return
+        }
+
+        findClass(className).hook {
+            injectMember {
+                method {
+                    name = "onNoClick"
+                    emptyParam()
+                }
+                replaceAny {
+                    val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
+                        ?: return@replaceAny callOriginal()
+                    if (!isAiSoundSupportedPackage(packageName)) {
+                        return@replaceAny callOriginal()
+                    }
+
+                    val context = resolveAiSoundCallbackContext(instanceOrNull)
+                        ?: return@replaceAny callOriginal()
+                    val item = resolveAiSoundCallbackItem(instanceOrNull)
+                        ?: return@replaceAny callOriginal()
+                    toggleAiSound(item, context)
+                    null
+                }
+            }
+
+            injectMember {
+                method {
+                    name = "onToast"
+                    emptyParam()
+                }
+                replaceAny {
+                    val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
+                    if (packageName != null && isAiSoundSupportedPackage(packageName)) {
+                        return@replaceAny null
+                    }
+                    callOriginal()
+                }
+            }
+        }
+    }
+
+    private fun PackageParam.hookAiSoundFloatingNotice() {
+        val className = "com.zui.game.service.ui.FloatingGameNoticController"
+        val methodName = "checkAISoundEnhancementEnable"
+        if (!hasMethodWithParamCount(className, methodName, 1, appClassLoader)) {
+            AndroidInternals.log("Skip missing $className#$methodName/1 in Game Helper")
+            return
+        }
+
+        findClass(className).hook {
+            injectMember {
+                method {
+                    name = methodName
+                    paramCount = 1
+                }
+                replaceAny {
+                    val packageName = args.firstOrNull() as? String ?: return@replaceAny callOriginal()
+                    if (!isAiSoundSupportedPackage(packageName)) {
+                        return@replaceAny callOriginal()
+                    }
+
+                    val context = runCatching {
+                        XposedHelpers.getObjectField(instanceOrNull, "mContext") as? Context
+                    }.getOrNull() ?: return@replaceAny callOriginal()
+
+                    readAiSoundSetting(context, defaultValue = 1) == 1 && isAiSoundFeatureOpened()
+                }
+            }
+        }
+    }
+
     private fun PackageParam.hookSuperResolutionSupportMethod(className: String, methodName: String) {
         findClass(className).hook {
             injectMember {
@@ -566,6 +689,143 @@ class MainHook : IYukiHookXposedInit {
                 }
             }
         }
+    }
+
+    private fun isAiSoundSupportedPackage(packageName: String?): Boolean {
+        return packageName != null && packageName in AI_SOUND_SUPPORTED_PACKAGES
+    }
+
+    private fun resolveAiSoundCallbackPackage(callback: Any?): String? {
+        return runCatching {
+            XposedHelpers.getObjectField(callback, "\$pkg") as? String
+        }.getOrNull()
+    }
+
+    private fun resolveAiSoundCallbackContext(callback: Any?): Context? {
+        return runCatching {
+            XposedHelpers.getObjectField(callback, "\$context") as? Context
+        }.getOrNull()
+    }
+
+    private fun resolveAiSoundCallbackItem(callback: Any?): Any? {
+        return runCatching {
+            XposedHelpers.getObjectField(callback, "this\$0")
+        }.getOrNull()
+    }
+
+    private fun readAiSoundSetting(context: Context, defaultValue: Int): Int {
+        val classLoader = resolveGameHelperClassLoader() ?: context.classLoader
+
+        return runCatching {
+            val utilClass = XposedHelpers.findClass("com.zui.util.SettingsValueUtilKt", classLoader)
+            XposedHelpers.callStaticMethod(
+                utilClass,
+                "getSystemInt",
+                AI_SOUND_SETTING_KEY,
+                context,
+                defaultValue,
+            ) as? Int
+        }.getOrNull() ?: runCatching {
+            Settings.System.getInt(context.contentResolver, AI_SOUND_SETTING_KEY, defaultValue)
+        }.getOrElse {
+            AndroidInternals.log("Failed to read AI sound setting", it)
+            defaultValue
+        }
+    }
+
+    private fun writeAiSoundSetting(context: Context, value: Int) {
+        val classLoader = resolveGameHelperClassLoader() ?: context.classLoader
+        val stored = runCatching {
+            val utilClass = XposedHelpers.findClass("com.zui.util.SettingsValueUtilKt", classLoader)
+            XposedHelpers.callStaticMethod(
+                utilClass,
+                "setSystemInt",
+                AI_SOUND_SETTING_KEY,
+                context,
+                value,
+            )
+            true
+        }.getOrElse {
+            AndroidInternals.log("Falling back to Settings.System for AI sound state", it)
+            false
+        }
+
+        if (!stored) {
+            runCatching {
+                Settings.System.putInt(context.contentResolver, AI_SOUND_SETTING_KEY, value)
+            }.onFailure {
+                AndroidInternals.log("Failed to write AI sound setting", it)
+            }
+        }
+    }
+
+    private fun isAiSoundFeatureOpened(): Boolean {
+        val classLoader = resolveGameHelperClassLoader() ?: return false
+
+        return runCatching {
+            val itemClass = XposedHelpers.findClass(
+                "com.zui.game.service.sys.item.ItemAISoundEnhancement",
+                classLoader,
+            )
+            val featuresClass = XposedHelpers.findClass(
+                "com.zui.game.service.FeaturesBaseOnRomKt",
+                classLoader,
+            )
+            val companion = XposedHelpers.getStaticObjectField(itemClass, "Companion")
+            val romFeatures = XposedHelpers.callStaticMethod(featuresClass, "getRomFeatures")
+            XposedHelpers.callMethod(companion, "isFeatureOpened", romFeatures) as? Boolean ?: false
+        }.getOrElse {
+            AndroidInternals.log("Failed to evaluate AI sound feature availability", it)
+            false
+        }
+    }
+
+    private fun applyAiSoundState(item: Any?, context: Context, enabled: Boolean) {
+        if (item == null) return
+
+        val status = if (enabled) 0 else 1
+        runCatching {
+            XposedHelpers.callMethod(item, "setMStatus", status)
+            XposedHelpers.callMethod(item, "setMNoClick", true)
+            val liveData = XposedHelpers.callMethod(item, "getMStatusLive")
+            XposedHelpers.callMethod(liveData, "postValue", status)
+        }.onFailure {
+            AndroidInternals.log("Failed to apply AI sound item state", it)
+        }
+
+        runCatching {
+            (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.setParameters(
+                if (enabled) AI_SOUND_PARAMETER_ENABLED else AI_SOUND_PARAMETER_DISABLED,
+            )
+        }.onFailure {
+            AndroidInternals.log("Failed to update AI sound audio parameters", it)
+        }
+    }
+
+    private fun toggleAiSound(item: Any, context: Context) {
+        val enable = runCatching {
+            (XposedHelpers.callMethod(item, "getMStatus") as? Int) != 0
+        }.getOrElse {
+            AndroidInternals.log("Failed to read current AI sound toggle state", it)
+            true
+        }
+
+        runCatching {
+            XposedHelpers.callMethod(item, "change2Status", if (enable) 0 else 1)
+        }.onFailure {
+            AndroidInternals.log("Failed to toggle AI sound state through change2Status()", it)
+            applyAiSoundState(item, context, enable)
+        }
+
+        runCatching {
+            (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.setParameters(
+                if (enable) AI_SOUND_PARAMETER_ENABLED else AI_SOUND_PARAMETER_DISABLED,
+            )
+        }.onFailure {
+            AndroidInternals.log("Failed to update AI sound audio parameters during toggle", it)
+        }
+
+        writeAiSoundSetting(context, if (enable) 1 else 0)
     }
 
     private fun HookParam.resolveRegisteredGamePackagesOrOriginal(source: String): Any? {
