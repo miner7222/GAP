@@ -91,15 +91,21 @@ object PackageManagerController {
 
     private fun readSelectedPackages(): Set<String> {
         // Prefer GAP's persisted override when it exists; otherwise fall back
-        // to the legacy module path and finally the device's active list.
+        // to the legacy module path, settings mirror, and finally the device's
+        // active list.
         val result = RootShell.run(
             """
             if [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ]; then
               cat '${SupportedPackageList.RUNTIME_LIST_PATH}'
             elif [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
               cat '${SupportedPackageList.MODULE_LIST_PATH}'
-            elif [ -f '${SupportedPackageList.ACTIVE_LIST_PATH}' ]; then
-              cat '${SupportedPackageList.ACTIVE_LIST_PATH}'
+            else
+              SETTINGS_LIST=$(settings get global '${SupportedPackageList.RUNTIME_SETTINGS_KEY}' 2>/dev/null || true)
+              if [ "${'$'}SETTINGS_LIST" != "null" ] && [ -n "${'$'}SETTINGS_LIST" ]; then
+                printf '%s\n' "${'$'}SETTINGS_LIST"
+              elif [ -f '${SupportedPackageList.ACTIVE_LIST_PATH}' ]; then
+                cat '${SupportedPackageList.ACTIVE_LIST_PATH}'
+              fi
             fi
             """.trimIndent(),
         )
@@ -114,6 +120,7 @@ object PackageManagerController {
     fun saveSelection(context: Context, selectedPackages: Set<String>): SavePackagesResult {
         val baselinePackages = ensureBaselinePackages(context)
         val useOverlay = selectedPackages != baselinePackages
+        val settingsValue = SupportedPackageList.buildSettingsValue(selectedPackages)
         val listFile = File(context.cacheDir, "gpp_app_list.generated")
         val scriptFile = File(context.cacheDir, "apply_gpp_app_list.sh")
 
@@ -123,7 +130,7 @@ object PackageManagerController {
             listFile.delete()
         }
 
-        scriptFile.writeText(buildRootScript(listFile.absolutePath, useOverlay))
+        scriptFile.writeText(buildRootScript(listFile.absolutePath, useOverlay, settingsValue))
         scriptFile.setExecutable(true)
 
         val result = RootShell.run("sh ${scriptFile.absolutePath}")
@@ -134,7 +141,7 @@ object PackageManagerController {
         return SavePackagesResult(overlayEnabled = useOverlay)
     }
 
-    private fun buildRootScript(tempFilePath: String, useOverlay: Boolean): String {
+    private fun buildRootScript(tempFilePath: String, useOverlay: Boolean, settingsValue: String): String {
         val writeOverlay = if (useOverlay) {
             """
             mkdir -p '${SupportedPackageList.RUNTIME_STATE_DIR}'
@@ -143,9 +150,13 @@ object PackageManagerController {
             mkdir -p /data/adb/modules/${SupportedPackageList.MODULE_ID}/system/etc
             cat '${tempFilePath}' > '${SupportedPackageList.MODULE_LIST_PATH}'
             chmod 0644 '${SupportedPackageList.MODULE_LIST_PATH}'
+            settings put global '${SupportedPackageList.RUNTIME_SETTINGS_KEY}' '${settingsValue}'
             """.trimIndent()
         } else {
-            "rm -f '${SupportedPackageList.RUNTIME_LIST_PATH}' '${SupportedPackageList.MODULE_LIST_PATH}'"
+            """
+            rm -f '${SupportedPackageList.RUNTIME_LIST_PATH}' '${SupportedPackageList.MODULE_LIST_PATH}'
+            settings delete global '${SupportedPackageList.RUNTIME_SETTINGS_KEY}' >/dev/null 2>&1 || true
+            """.trimIndent()
         }
 
         return """

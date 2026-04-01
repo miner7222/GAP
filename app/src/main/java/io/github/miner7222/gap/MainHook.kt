@@ -11,6 +11,7 @@ import android.content.res.Resources
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.IBinder
+import android.provider.Settings
 import com.highcapable.yukihookapi.annotation.xposed.InjectYukiHookWithXposed
 import com.highcapable.yukihookapi.hook.factory.configs
 import com.highcapable.yukihookapi.hook.factory.encase
@@ -32,6 +33,8 @@ class MainHook : IYukiHookXposedInit {
         private const val GAME_HELPER_PACKAGE = "com.zui.game.service"
         private const val SUPER_RESOLUTION_FEATURE_KEY = "key_super_resolution"
         private const val COLORFUL_LIGHT_FEATURE_KEY = "key_colorful_light"
+        private const val GAME_RESOLUTION_APPS_ARRAY = "game_resolution_apps"
+        private const val DEFAULT_SUPER_RESOLUTION_ARRAY_FLAGS = "#1#1"
         private const val GAME_HELPER_SETTINGS_ACTIVITY = "com.zui.ugame.gamesetting.ui.options.OptionActivity"
         private const val GAME_HELPER_LABEL_RES = "app_name"
         private const val GAME_HELPER_ICON_RES = "ic_launcher_game"
@@ -53,7 +56,7 @@ class MainHook : IYukiHookXposedInit {
     @Volatile
     private var cachedSupportedPackages: Set<String>? = null
     @Volatile
-    private var cachedSupportedPackagesLastModified = Long.MIN_VALUE
+    private var cachedSupportedPackagesSignature: String? = null
 
     /**
      * Prevent infinite recursion when our metadata hooks call
@@ -164,9 +167,8 @@ class MainHook : IYukiHookXposedInit {
         installRomFeatureHooks()
         // Settings uses a separate feature registry, so patch it independently.
         installGameSettingFeatureHooks()
-        // Open the SR entry points for the currently focused game UI and
-        // keep Game Helper's support-package queries aligned with the
-        // active gpp_app_list that gppservice will read.
+        // Keep SR device support enabled while swapping the stock
+        // whitelist inputs to the active gpp_app_list view.
         installSuperResolutionAvailabilityHooks()
         // Replace the stock SR whitelist lookups with the active gpp_app_list view.
         installSuperResolutionSupportHooks()
@@ -469,95 +471,10 @@ class MainHook : IYukiHookXposedInit {
             }
         }
 
-        // Point the cached SR item at the currently focused package so later
-        // collector callbacks can update the same item without guessing.
-        findClass("com.zui.game.service.ui.GameHelperViewController").hook {
-            injectMember {
-                method {
-                    name = "setPkgName"
-                    param(String::class.java)
-                }
-                afterHook {
-                    val packageName = args.firstOrNull() as? String ?: return@afterHook
-                    val item = runCatching {
-                        XposedHelpers.callMethod(instanceOrNull, "getMItemSuperResolution")
-                    }.getOrNull() ?: return@afterHook
+        installSuperResolutionResourceHooks()
 
-                    runCatching {
-                        XposedHelpers.setObjectField(item, "currentPkg", packageName)
-                    }.onFailure {
-                        AndroidInternals.log("Failed to update ItemSuperResolution currentPkg", it)
-                    }
-
-                    if (shouldExposeSuperResolution(packageName)) {
-                        runCatching {
-                            XposedHelpers.callMethod(item, "change2Status", 0)
-                        }.onFailure {
-                            AndroidInternals.log("Failed to force ItemSuperResolution visible state", it)
-                        }
-                        setSuperResolutionSwitchState(true)
-                    }
-                }
-            }
-        }
-
-        // Mirror the original collector logic, but keep the SR entry available
-        // for whatever package the floating panel is currently rendering.
-        findClass("com.zui.game.service.ui.GameHelperViewController\$setPkgName\$9\$1").hook {
-            injectMember {
-                method {
-                    name = "emit"
-                    paramCount = 2
-                }
-                replaceAny {
-                    val packageName = resolveControllerPackageName(instanceOrNull).orEmpty()
-                    val enabled = shouldExposeSuperResolution(packageName) || (args.firstOrNull() as? Boolean == true)
-                    val controller = runCatching {
-                        XposedHelpers.getObjectField(instanceOrNull, "this\$0")
-                    }.getOrNull()
-                    val item = runCatching {
-                        XposedHelpers.callMethod(controller, "getMItemSuperResolution")
-                    }.getOrNull()
-
-                    if (item != null) {
-                        if (packageName.isNotBlank()) {
-                            runCatching {
-                                XposedHelpers.setObjectField(item, "currentPkg", packageName)
-                            }
-                        }
-                        runCatching {
-                            XposedHelpers.callMethod(item, "change2Status", if (enabled) 0 else 1)
-                        }.onFailure {
-                            AndroidInternals.log("Failed to sync ItemSuperResolution state from collector", it)
-                        }
-                    }
-
-                    if (enabled) {
-                        setSuperResolutionSwitchState(true)
-                    }
-
-                    Unit
-                }
-            }
-        }
-
-        findClass("com.zui.game.service.ui.superresolution.SuperResolutionWindowManager").hook {
-            injectMember {
-                method {
-                    name = "onGameModeEnter"
-                    paramCount = 1
-                }
-                afterHook {
-                    val packageName = args.firstOrNull() as? String ?: return@afterHook
-                    if (shouldExposeSuperResolution(packageName)) {
-                        applyDefaultSuperResolutionValues()
-                        setSuperResolutionSwitchState(true)
-                    }
-                }
-            }
-        }
-
-        // The live QuickPanel collector removes SR for packages not present in the stock whitelist array.
+        // Backstop the rendered list so stale SR buttons cannot survive after
+        // the runtime whitelist changes.
         findClass("com.zui.game.service.ui.GameHelperViewController\$getCurrentView\$1\$1").hook {
             injectMember {
                 method {
@@ -578,19 +495,40 @@ class MainHook : IYukiHookXposedInit {
                 }
             }
         }
+    }
 
-        // initData() will still flip the SR state flow off for unsupported games unless we restore it.
-        findClass("com.zui.game.service.ui.superresolution.SuperResolutionWindowManager\$initData\$1").hook {
+    private fun PackageParam.installSuperResolutionResourceHooks() {
+        findClass("android.content.res.Resources").hook {
             injectMember {
                 method {
-                    name = "invokeSuspend"
-                    paramCount = 1
+                    name = "getStringArray"
+                    param(Int::class.javaPrimitiveType!!)
                 }
-                afterHook {
-                    val packageName = resolveCurrentSuperResolutionGame().orEmpty()
-                    if (shouldExposeSuperResolution(packageName)) {
-                        applyDefaultSuperResolutionValues()
-                        setSuperResolutionSwitchState(true)
+                replaceAny {
+                    val resources = instanceOrNull as? Resources ?: return@replaceAny callOriginal()
+                    val resId = args.firstOrNull() as? Int ?: return@replaceAny callOriginal()
+                    val entryName = runCatching { resources.getResourceEntryName(resId) }.getOrNull()
+                    val packageName = runCatching { resources.getResourcePackageName(resId) }.getOrNull()
+
+                    if (entryName != GAME_RESOLUTION_APPS_ARRAY || packageName != GAME_HELPER_PACKAGE) {
+                        return@replaceAny callOriginal()
+                    }
+
+                    val originalEntries = runCatching {
+                        callOriginal() as? Array<String>
+                    }.getOrElse {
+                        AndroidInternals.log("Failed to read stock $GAME_RESOLUTION_APPS_ARRAY entries", it)
+                        null
+                    } ?: return@replaceAny emptyArray<String>()
+
+                    val overriddenEntries = resolveSuperResolutionArrayEntries(originalEntries)
+                    if (overriddenEntries != null) {
+                        AndroidInternals.log(
+                            "Replaced $GAME_RESOLUTION_APPS_ARRAY with ${overriddenEntries.size} runtime entries",
+                        )
+                        overriddenEntries
+                    } else {
+                        originalEntries
                     }
                 }
             }
@@ -665,21 +603,52 @@ class MainHook : IYukiHookXposedInit {
         }
     }
 
-    private fun resolveItemCurrentPackage(item: Any?): String? {
-        return runCatching {
-            XposedHelpers.getObjectField(item, "currentPkg") as? String
-        }.getOrElse {
-            AndroidInternals.log("Failed to resolve ItemSuperResolution currentPkg", it)
-            null
+    private fun resolveSuperResolutionArrayEntries(originalEntries: Array<String>): Array<String>? {
+        val packages = resolveSupportedPackages() ?: return null
+        val originalByPackage = LinkedHashMap<String, String>(originalEntries.size)
+
+        originalEntries.forEach { entry ->
+            val packageName = entry.substringBefore('#').trim()
+            if (packageName.isNotBlank()) {
+                originalByPackage[packageName] = entry
+            }
         }
+
+        val normalized = LinkedHashSet<String>(packages.size)
+        packages.forEach { packageName ->
+            if (packageName.isBlank()) return@forEach
+            normalized += originalByPackage[packageName]
+                ?: "$packageName$DEFAULT_SUPER_RESOLUTION_ARRAY_FLAGS"
+        }
+
+        return normalized.toTypedArray()
     }
 
     private fun resolveSupportedPackages(): List<String>? {
         return runCatching {
+            readSupportedPackagesFromSettings()?.let { packages ->
+                val signature = "settings:${packages.joinToString(",")}"
+                val cached = cachedSupportedPackages
+                if (cached != null && cachedSupportedPackagesSignature == signature) {
+                    return@runCatching ArrayList(cached)
+                }
+
+                cachedSupportedPackages = LinkedHashSet(packages)
+                cachedSupportedPackagesSignature = signature
+                return@runCatching packages
+            }
+
             val whitelistFile = File(SupportedPackageList.ACTIVE_LIST_PATH)
-            val lastModified = whitelistFile.lastModified()
+            val signature = buildString {
+                append("file:")
+                append(whitelistFile.exists())
+                append(':')
+                append(whitelistFile.length())
+                append(':')
+                append(whitelistFile.lastModified())
+            }
             val cached = cachedSupportedPackages
-            if (cached != null && cachedSupportedPackagesLastModified == lastModified) {
+            if (cached != null && cachedSupportedPackagesSignature == signature) {
                 return@runCatching ArrayList(cached)
             }
 
@@ -687,9 +656,14 @@ class MainHook : IYukiHookXposedInit {
                 .filterTo(ArrayList()) { packageName ->
                     packageName.isNotBlank() && packageName != GAME_HELPER_PACKAGE
                 }
+            if (packages.isEmpty()) {
+                cachedSupportedPackages = null
+                cachedSupportedPackagesSignature = null
+                return@runCatching null
+            }
 
             cachedSupportedPackages = LinkedHashSet(packages)
-            cachedSupportedPackagesLastModified = lastModified
+            cachedSupportedPackagesSignature = signature
             packages
         }.getOrElse {
             AndroidInternals.log("Failed to resolve SR whitelist packages", it)
@@ -697,8 +671,28 @@ class MainHook : IYukiHookXposedInit {
         }
     }
 
+    private fun readSupportedPackagesFromSettings(): List<String>? {
+        val context = resolveSystemContext() ?: resolveProcessApplicationContext() ?: return null
+        val rawValue = runCatching {
+            Settings.Global.getString(context.contentResolver, SupportedPackageList.RUNTIME_SETTINGS_KEY)
+        }.getOrElse {
+            AndroidInternals.log("Failed to read runtime SR whitelist from Settings.Global", it)
+            null
+        } ?: return null
+
+        return SupportedPackageList.parsePackages(rawValue)
+            .filterTo(ArrayList()) { packageName ->
+                packageName.isNotBlank() && packageName != GAME_HELPER_PACKAGE
+            }
+    }
+
     private fun shouldExposeSuperResolution(packageName: String): Boolean {
-        return packageName.isNotBlank() && packageName != GAME_HELPER_PACKAGE
+        if (packageName.isBlank() || packageName == GAME_HELPER_PACKAGE) {
+            return false
+        }
+
+        val packages = resolveSupportedPackages() ?: return true
+        return packageName in packages
     }
 
     private fun normalizeGameSettingFeatureList(features: List<Any?>): List<Any?> {
@@ -735,50 +729,19 @@ class MainHook : IYukiHookXposedInit {
         val packageName = resolveControllerPackageName(controller).orEmpty()
         val currentItems = resolveFloatingFeatureItems(controller) ?: return
         if (currentItems.isEmpty()) return   // List not populated yet — let the original code fill it first
-        val normalized = ArrayList<Any>(currentItems.size + 1)
-        var hasSuperResolution = false
+        val normalized = ArrayList<Any>(currentItems.size)
 
         currentItems.forEach { item ->
             val key = resolveItemKey(item)
             when {
                 key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard() -> return@forEach
-                key == SUPER_RESOLUTION_FEATURE_KEY -> {
-                    if (!shouldExposeSuperResolution(packageName)) return@forEach
-                    hasSuperResolution = true
-                    prepareSuperResolutionItem(item, packageName)
-                }
+                key == SUPER_RESOLUTION_FEATURE_KEY && !shouldExposeSuperResolution(packageName) -> return@forEach
             }
             normalized += item
         }
 
-        if (shouldExposeSuperResolution(packageName) && !hasSuperResolution) {
-            val item = runCatching {
-                XposedHelpers.callMethod(controller, "getMItemSuperResolution")
-            }.getOrNull()
-            if (item != null) {
-                prepareSuperResolutionItem(item, packageName)
-                normalized += item
-                AndroidInternals.log("Injected SR item for $packageName from $source")
-            }
-        }
-
         if (!hasSameKeys(currentItems, normalized)) {
             publishFloatingFeatureItems(controller, normalized)
-        } else if (shouldExposeSuperResolution(packageName)) {
-            publishFloatingFeatureItems(controller, normalized)
-        }
-    }
-
-    private fun resolveCurrentSuperResolutionGame(): String? {
-        return runCatching {
-            val clazz = XposedHelpers.findClass(
-                "com.zui.game.service.ui.superresolution.SuperResolutionWindowManager",
-                resolveGameHelperClassLoader(),
-            )
-            XposedHelpers.getStaticObjectField(clazz, "currentGame") as? String
-        }.getOrElse {
-            AndroidInternals.log("Failed to resolve current SR package", it)
-            null
         }
     }
 
@@ -850,23 +813,6 @@ class MainHook : IYukiHookXposedInit {
         }.getOrNull() ?: 10
     }
 
-    private fun prepareSuperResolutionItem(item: Any, packageName: String) {
-        runCatching {
-            XposedHelpers.setObjectField(item, "currentPkg", packageName)
-        }.onFailure {
-            AndroidInternals.log("Failed to bind SR item to $packageName", it)
-        }
-
-        runCatching {
-            XposedHelpers.callMethod(item, "change2Status", 0)
-        }.onFailure {
-            AndroidInternals.log("Failed to switch SR item visible for $packageName", it)
-        }
-
-        applyDefaultSuperResolutionValues()
-        setSuperResolutionSwitchState(true)
-    }
-
     private fun resolveItemKey(item: Any?): String? {
         return runCatching { XposedHelpers.callMethod(item, "getKey") as? String }.getOrNull()
     }
@@ -874,39 +820,6 @@ class MainHook : IYukiHookXposedInit {
     private fun hasSameKeys(before: List<Any>, after: List<Any>): Boolean {
         if (before.size != after.size) return false
         return before.map(::resolveItemKey) == after.map(::resolveItemKey)
-    }
-
-    private fun applyDefaultSuperResolutionValues() {
-        runCatching {
-            val superResolutionClass = XposedHelpers.findClass(
-                "com.zui.game.service.ui.superresolution.SuperResolutionWindowManager",
-                resolveGameHelperClassLoader(),
-            )
-            XposedHelpers.setStaticIntField(superResolutionClass, "resolutionValue", 1)
-            XposedHelpers.setStaticIntField(superResolutionClass, "interpolation", 1)
-            AndroidInternals.log("Applied default SR values for active package")
-        }.onFailure {
-            AndroidInternals.log("Failed to apply default SR values", it)
-        }
-    }
-
-    private fun setSuperResolutionSwitchState(enabled: Boolean) {
-        runCatching {
-            val superResolutionClass = XposedHelpers.findClass(
-                "com.zui.game.service.ui.superresolution.SuperResolutionWindowManager",
-                resolveGameHelperClassLoader(),
-            )
-            val stateFlow = XposedHelpers.getStaticObjectField(superResolutionClass, "_superResolutionSwitch")
-            val value = java.lang.Boolean.valueOf(enabled)
-
-            runCatching {
-                XposedHelpers.callMethod(stateFlow, "setValue", value)
-            }.recoverCatching {
-                XposedHelpers.callMethod(stateFlow, "tryEmit", value)
-            }.getOrThrow()
-        }.onFailure {
-            AndroidInternals.log("Failed to force SR switch state", it)
-        }
     }
 
     private fun patchGameHelperApplicationInfo(
