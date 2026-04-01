@@ -1,5 +1,8 @@
 package io.github.miner7222.gap.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -12,6 +15,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updatePadding
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
+import io.github.miner7222.gap.BuildConfig
 import io.github.miner7222.gap.R
 import io.github.miner7222.gap.SupportedPackageList
 import io.github.miner7222.gap.databinding.ActivityMainBinding
@@ -30,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedPackages = LinkedHashSet<String>()
     private var currentQuery = ""
     private var showNotInstalledPackages = false
+    private var shownUpdateTag: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +74,9 @@ class MainActivity : AppCompatActivity() {
         installSystemBarInsets()
 
         requestRootAndLoadPackages()
+        if (savedInstanceState == null) {
+            checkForUpdates()
+        }
     }
 
     override fun onDestroy() {
@@ -87,6 +95,23 @@ class MainActivity : AppCompatActivity() {
                     setBusy(false)
                     showRootAccessDialog()
                 }
+            }
+        }
+    }
+
+    private fun checkForUpdates() {
+        executor.execute {
+            val release = UpdateChecker.fetchLatestRelease() ?: return@execute
+            if (!UpdateChecker.isNewerRelease(release.tagName, BuildConfig.VERSION_NAME)) {
+                return@execute
+            }
+
+            runOnUiThread {
+                if (isFinishing || isDestroyed || shownUpdateTag == release.tagName) {
+                    return@runOnUiThread
+                }
+                shownUpdateTag = release.tagName
+                showUpdateDialog(release)
             }
         }
     }
@@ -249,6 +274,38 @@ class MainActivity : AppCompatActivity() {
                 finish()
             }
             .show()
+    }
+
+    private fun showUpdateDialog(release: ReleaseInfo) {
+        val changelog = release.body.ifBlank { getString(R.string.update_no_changes) }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.update_available_title, release.tagName))
+            .setMessage(
+                getString(
+                    R.string.update_available_message,
+                    BuildConfig.VERSION_NAME,
+                    release.tagName,
+                    changelog,
+                ),
+            )
+            .setPositiveButton(R.string.update_open_github) { _, _ ->
+                openGitHubReleases()
+            }
+            .setNegativeButton(R.string.update_no_button, null)
+            .show()
+    }
+
+    private fun openGitHubReleases() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.RELEASES_URL))
+        runCatching {
+            startActivity(intent)
+        }.onFailure { error ->
+            if (error !is ActivityNotFoundException) {
+                error.printStackTrace()
+            }
+            showToast(getString(R.string.update_open_failed))
+        }
     }
 
     private fun showToast(message: String) {
