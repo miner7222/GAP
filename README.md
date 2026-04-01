@@ -9,9 +9,9 @@ This is the Xposed side of the Lenovo Super Resolution port.
 
 It patches Lenovo Game Assistant at runtime and includes **GAP** (`Game Assistant Plus`), the app used to manage which games are enabled for Super Resolution / Frame Interpolation.
 
-On **non-`baldur` devices** such as **TB322FC**, this module is meant to be used together with **LSRPort**.
+It also keeps Lenovo's Game Helper resource metadata aligned with the rebuilt package, widens selected region-gated feature paths where needed.
 
-On **`baldur`**, the module leaves the stock Lenovo `lenovosr` path alone and only applies the runtime patches it needs.
+This module is meant to be used together with **LSRPort**.
 
 ---
 
@@ -37,14 +37,14 @@ On **`baldur`**, the module leaves the stock Lenovo `lenovosr` path alone and on
 ## Usage
 
 - Open **GAP** if you want to add or remove supported games.
-- After saving, GAP restarts `gppservice` and force-stops Game Assistant so changes apply immediately.
-- Launch your game and use Game Assistant's **Super Resolution** toggle in the sidebar.
+- After saving, GAP updates the runtime whitelist, syncs it to `Settings.Global`, restarts `gppservice`, and force-stops `com.zui.game.service` so changes apply immediately.
+- Launch your game and use Game Assistant's **Ultra HD Vision** toggle in the sidebar.
 
 ---
 
 ## Troubleshooting
 
-- If the **Super Resolution** toggle does not appear, make sure the module is enabled in **LSPosed** and the game is selected in **GAP**.
+- If the **Ultra HD Vision** toggle does not appear, make sure the module is enabled in **LSPosed** and the game is selected in **GAP**.
 - If GAP cannot save changes, check that root access was granted.
 
 ---
