@@ -90,11 +90,13 @@ object PackageManagerController {
     }
 
     private fun readSelectedPackages(): Set<String> {
-        // Prefer GAP's runtime override when it exists; otherwise fall back to
-        // the device's currently active /system/etc/gpp_app_list.
+        // Prefer GAP's persisted override when it exists; otherwise fall back
+        // to the legacy module path and finally the device's active list.
         val result = RootShell.run(
             """
-            if [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
+            if [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ]; then
+              cat '${SupportedPackageList.RUNTIME_LIST_PATH}'
+            elif [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
               cat '${SupportedPackageList.MODULE_LIST_PATH}'
             elif [ -f '${SupportedPackageList.ACTIVE_LIST_PATH}' ]; then
               cat '${SupportedPackageList.ACTIVE_LIST_PATH}'
@@ -135,12 +137,15 @@ object PackageManagerController {
     private fun buildRootScript(tempFilePath: String, useOverlay: Boolean): String {
         val writeOverlay = if (useOverlay) {
             """
+            mkdir -p '${SupportedPackageList.RUNTIME_STATE_DIR}'
+            cat '${tempFilePath}' > '${SupportedPackageList.RUNTIME_LIST_PATH}'
+            chmod 0644 '${SupportedPackageList.RUNTIME_LIST_PATH}'
             mkdir -p /data/adb/modules/${SupportedPackageList.MODULE_ID}/system/etc
             cat '${tempFilePath}' > '${SupportedPackageList.MODULE_LIST_PATH}'
             chmod 0644 '${SupportedPackageList.MODULE_LIST_PATH}'
             """.trimIndent()
         } else {
-            "rm -f '${SupportedPackageList.MODULE_LIST_PATH}'"
+            "rm -f '${SupportedPackageList.RUNTIME_LIST_PATH}' '${SupportedPackageList.MODULE_LIST_PATH}'"
         }
 
         return """
@@ -164,12 +169,18 @@ object PackageManagerController {
             |
             |bind_active_list() {
             |  unbind_active_list
-            |  if ! mount -o bind '${SupportedPackageList.MODULE_LIST_PATH}' /system/etc/gpp_app_list 2>/dev/null; then
-            |    mount --bind '${SupportedPackageList.MODULE_LIST_PATH}' /system/etc/gpp_app_list
+            |  SOURCE_LIST='${SupportedPackageList.RUNTIME_LIST_PATH}'
+            |  if [ ! -f "${'$'}SOURCE_LIST" ]; then
+            |    SOURCE_LIST='${SupportedPackageList.MODULE_LIST_PATH}'
+            |  fi
+            |  if ! mount -o bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list 2>/dev/null; then
+            |    mount --bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list
             |  fi
             |}
             |
-            |if [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
+            |if [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ]; then
+            |  bind_active_list
+            |elif [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
             |  bind_active_list
             |else
             |  unbind_active_list

@@ -10,8 +10,12 @@ object SupportedPackageList {
     const val ACTIVE_LIST_PATH = "/system/etc/gpp_app_list"
     const val GAME_HELPER_PACKAGE = "com.zui.game.service"
     const val MODULE_ID = "lsr-port"
-    // GAP writes the optional runtime override here. When absent, the device's
-    // stock /system/etc/gpp_app_list remains the source of truth.
+    // Persist the custom whitelist outside the Magisk module tree so it
+    // survives reboots and module reinstalls.
+    const val RUNTIME_STATE_DIR = "/data/adb/$MODULE_ID"
+    const val RUNTIME_LIST_PATH = "$RUNTIME_STATE_DIR/gpp_app_list"
+    // Keep the legacy module path for migration and compatibility with older
+    // service.sh revisions that still expect the list under the module tree.
     const val MODULE_LIST_PATH = "/data/adb/modules/$MODULE_ID/system/etc/gpp_app_list"
 
     fun readActivePackages(): LinkedHashSet<String> {
