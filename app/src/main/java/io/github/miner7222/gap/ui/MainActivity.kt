@@ -294,7 +294,7 @@ class MainActivity : AppCompatActivity() {
         val changelog = release.body.ifBlank { getString(R.string.update_no_changes) }
 
         AlertDialog.Builder(this)
-            .setTitle(getString(R.string.update_available_title, release.tagName))
+            .setTitle(R.string.update_available_title)
             .setMessage(
                 getString(
                     R.string.update_available_message,

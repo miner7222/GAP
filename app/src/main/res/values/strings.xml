@@ -19,7 +19,7 @@
     <string name="root_required_message">Grant GAP ROOT access and try again.</string>
     <string name="retry_button">Retry</string>
     <string name="close_button">Close</string>
-    <string name="update_available_title">Update available: %1$s</string>
+    <string name="update_available_title">Update available</string>
     <string name="update_available_message">Current version: %1$s
 
 Latest version: %2$s

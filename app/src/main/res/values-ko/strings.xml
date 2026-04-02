@@ -17,7 +17,7 @@
     <string name="root_required_message">GAP에 ROOT 권한을 부여한 뒤 다시 시도하세요.</string>
     <string name="retry_button">다시 시도</string>
     <string name="close_button">닫기</string>
-    <string name="update_available_title">업데이트 가능: %1$s</string>
+    <string name="update_available_title">업데이트 가능</string>
     <string name="update_available_message">현재 버전: %1$s
 
 최신 버전: %2$s
