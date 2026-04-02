@@ -1,16 +1,8 @@
 package io.github.miner7222.gap
 
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.pm.ActivityInfo
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.content.pm.ResolveInfo
 import android.content.res.Resources
-import android.graphics.drawable.Drawable
 import android.media.AudioManager
-import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
 import com.highcapable.yukihookapi.annotation.xposed.InjectYukiHookWithXposed
@@ -42,13 +34,7 @@ class MainHook : IYukiHookXposedInit {
         private const val COLORFUL_LIGHT_FEATURE_KEY = "key_colorful_light"
         private const val GAME_RESOLUTION_APPS_ARRAY = "game_resolution_apps"
         private const val DEFAULT_SUPER_RESOLUTION_ARRAY_FLAGS = "#1#1"
-        private const val GAME_HELPER_SETTINGS_ACTIVITY = "com.zui.ugame.gamesetting.ui.options.OptionActivity"
-        private const val GAME_HELPER_LABEL_RES = "app_name"
-        private const val GAME_HELPER_ICON_RES = "ic_launcher_game"
-        private const val GAME_HELPER_ROUND_ICON_RES = "ic_launcher_round"
-        private const val GAME_HELPER_SETTINGS_ICON_RES = "ic_game_assistant_svg"
         private const val GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY = "option_item_colorful_light"
-        private const val SETTINGS_ICON_META_KEY = "com.android.settings.icon"
         private const val PUBG_VIBRATION_SHARED_KEY = "game.pubg.mobile"
         private val PUBG_VARIANT_PACKAGES = linkedSetOf(
             "com.tencent.ig",
@@ -62,7 +48,6 @@ class MainHook : IYukiHookXposedInit {
     }
 
     private val systemHooksInstalled = AtomicBoolean(false)
-    private val clientHooksInstalled = AtomicBoolean(false)
     private val gameHooksInstalled = AtomicBoolean(false)
     @Volatile
     private var systemContext: Context? = null
@@ -75,26 +60,15 @@ class MainHook : IYukiHookXposedInit {
     @Volatile
     private var cachedSupportedPackagesSignature: String? = null
 
-    /**
-     * Prevent infinite recursion when our metadata hooks call
-     * getResourcesForApplication(), which may re-enter PackageManager.
-     */
-    private val patchingGameHelper = ThreadLocal<Boolean>()
-
     override fun onInit() = configs {
-        // YukiHook's internal debug logger queries PackageManager metadata,
-        // which re-enters our system_server PackageManager hooks and can loop
-        // during early boot. Keep it disabled even in debug builds.
+        // Keep YukiHook's internal debug logger disabled to reduce early-boot
+        // PackageManager churn while system_server hooks are coming online.
         isDebug = false
     }
 
     override fun onHook() = encase {
         loadSystem {
             applySystemHooks()
-        }
-
-        loadApp {
-            applyClientMetadataHooks()
         }
 
         loadApp(GAME_HELPER_PACKAGE) {
@@ -144,9 +118,6 @@ class MainHook : IYukiHookXposedInit {
         } else {
             AndroidInternals.log("Skipping compatibility lenovosr bootstrap hooks on baldur")
         }
-
-        // Fix app label/icon lookups when a rebuilt Game Helper APK changes resource IDs.
-        installPackageMetadataHooks()
 
         AndroidInternals.log("Installed YukiHook system_server hooks")
     }
@@ -198,129 +169,6 @@ class MainHook : IYukiHookXposedInit {
         installVibrationSupportHooks()
 
         AndroidInternals.log("Installed YukiHook game helper hooks")
-    }
-
-    private fun PackageParam.applyClientMetadataHooks() {
-        if (!clientHooksInstalled.compareAndSet(false, true)) return
-
-        installClientPackageManagerHooks()
-
-        AndroidInternals.log("Installed YukiHook client metadata hooks")
-    }
-
-    private fun PackageParam.installPackageMetadataHooks() {
-        hookApplicationInfoMethod(
-            "com.android.server.pm.ComputerEngine",
-            "getApplicationInfoInternalBody",
-            4,
-            preferInstanceContext = true,
-        )
-        hookApplicationInfoMethod(
-            "com.android.server.pm.ComputerEngine",
-            "generateApplicationInfoFromSettings",
-            4,
-            preferInstanceContext = true,
-        )
-        hookApplicationInfoMethod(
-            "com.android.server.pm.parsing.PackageInfoUtils",
-            "generateApplicationInfo",
-            5,
-            preferInstanceContext = false,
-        )
-        hookActivityInfoMethod(
-            "com.android.server.pm.ComputerEngine",
-            "getActivityInfoInternalBody",
-            4,
-            preferInstanceContext = true,
-        )
-        hookActivityInfoMethod(
-            "com.android.server.pm.parsing.PackageInfoUtils",
-            "generateActivityInfo",
-            6,
-            preferInstanceContext = false,
-        )
-        hookActivityInfoMethod(
-            "com.android.server.pm.parsing.PackageInfoUtils",
-            "generateActivityInfo",
-            7,
-            preferInstanceContext = false,
-        )
-    }
-
-    private fun PackageParam.hookApplicationInfoMethod(
-        className: String,
-        methodName: String,
-        paramCount: Int,
-        preferInstanceContext: Boolean,
-    ) {
-        if (!hasMethodWithParamCount(className, methodName, paramCount, appClassLoader)) {
-            AndroidInternals.log("Skip missing $className#$methodName/$paramCount in system_server")
-            return
-        }
-
-        findClass(className).hook {
-            injectMember {
-                method {
-                    name = methodName
-                    this.paramCount = paramCount
-                }
-                replaceAny {
-                    if (patchingGameHelper.get() == true) return@replaceAny callOriginal()
-                    val original = runCatching { callOriginal() as? ApplicationInfo }.getOrElse {
-                        AndroidInternals.log("Failed to call original $className#$methodName", it)
-                        null
-                    }
-                    patchingGameHelper.set(true)
-                    try {
-                        patchGameHelperApplicationInfo(
-                            info = original,
-                            preferredContext = if (preferInstanceContext) resolveSystemContext(instanceOrNull) else null,
-                            source = "$className#$methodName",
-                        )
-                    } finally {
-                        patchingGameHelper.set(false)
-                    }
-                }
-            }
-        }
-    }
-
-    private fun PackageParam.hookActivityInfoMethod(
-        className: String,
-        methodName: String,
-        paramCount: Int,
-        preferInstanceContext: Boolean,
-    ) {
-        if (!hasMethodWithParamCount(className, methodName, paramCount, appClassLoader)) {
-            AndroidInternals.log("Skip missing $className#$methodName/$paramCount in system_server")
-            return
-        }
-
-        findClass(className).hook {
-            injectMember {
-                method {
-                    name = methodName
-                    this.paramCount = paramCount
-                }
-                replaceAny {
-                    if (patchingGameHelper.get() == true) return@replaceAny callOriginal()
-                    val original = runCatching { callOriginal() as? ActivityInfo }.getOrElse {
-                        AndroidInternals.log("Failed to call original $className#$methodName", it)
-                        null
-                    }
-                    patchingGameHelper.set(true)
-                    try {
-                        patchGameHelperActivityInfo(
-                            info = original,
-                            preferredContext = if (preferInstanceContext) resolveSystemContext(instanceOrNull) else null,
-                            source = "$className#$methodName",
-                        )
-                    } finally {
-                        patchingGameHelper.set(false)
-                    }
-                }
-            }
-        }
     }
 
     private fun PackageParam.installRomFeatureHooks() {
@@ -1332,331 +1180,6 @@ class MainHook : IYukiHookXposedInit {
         return before.map(::resolveItemKey) == after.map(::resolveItemKey)
     }
 
-    private fun patchGameHelperApplicationInfo(
-        info: ApplicationInfo?,
-        preferredContext: Context?,
-        source: String,
-    ): ApplicationInfo? {
-        if (info?.packageName != GAME_HELPER_PACKAGE) return info
-
-        val context = preferredContext ?: resolveSystemContext()
-        if (context == null) {
-            AndroidInternals.log("No context available to patch $GAME_HELPER_PACKAGE from $source")
-            return info
-        }
-
-        val packageManager = context.packageManager ?: run {
-            AndroidInternals.log("PackageManager unavailable while patching $GAME_HELPER_PACKAGE from $source")
-            return info
-        }
-
-        val resources = runCatching {
-            packageManager.getResourcesForApplication(GAME_HELPER_PACKAGE)
-        }.getOrElse {
-            AndroidInternals.log("Failed to load resources for $GAME_HELPER_PACKAGE from $source", it)
-            return info
-        }
-
-        resolveStringResource(resources, GAME_HELPER_LABEL_RES)?.let { label ->
-            info.nonLocalizedLabel = label
-            info.labelRes = 0
-        }
-
-        resolveDrawableResource(resources, GAME_HELPER_ICON_RES).takeIf { it != 0 }?.let {
-            info.icon = it
-        }
-
-        resolveDrawableResource(resources, GAME_HELPER_ROUND_ICON_RES).takeIf { it != 0 }?.let {
-            setRoundIconResource(info, it)
-        }
-
-        resolveDrawableResource(resources, GAME_HELPER_SETTINGS_ICON_RES).takeIf { it != 0 }?.let { settingsIcon ->
-            if (info.metaData == null) {
-                info.metaData = Bundle()
-            }
-            info.metaData?.putInt(SETTINGS_ICON_META_KEY, settingsIcon)
-        }
-
-        return info
-    }
-
-    private fun patchGameHelperActivityInfo(
-        info: ActivityInfo?,
-        preferredContext: Context?,
-        source: String,
-    ): ActivityInfo? {
-        if (info?.packageName != GAME_HELPER_PACKAGE) return info
-
-        val context = preferredContext ?: resolveSystemContext()
-        if (context == null) {
-            AndroidInternals.log("No context available to patch $GAME_HELPER_PACKAGE activity from $source")
-            return info
-        }
-
-        val packageManager = context.packageManager ?: run {
-            AndroidInternals.log("PackageManager unavailable while patching $GAME_HELPER_PACKAGE activity from $source")
-            return info
-        }
-
-        val resources = runCatching {
-            packageManager.getResourcesForApplication(GAME_HELPER_PACKAGE)
-        }.getOrElse {
-            AndroidInternals.log("Failed to load resources for $GAME_HELPER_PACKAGE activity from $source", it)
-            return info
-        }
-
-        patchGameHelperApplicationInfo(
-            info = info.applicationInfo,
-            preferredContext = context,
-            source = "$source#applicationInfo",
-        )
-
-        resolveStringResource(resources, GAME_HELPER_LABEL_RES)?.let { label ->
-            info.nonLocalizedLabel = label
-            info.labelRes = 0
-        }
-
-        val iconName = if (info.name == GAME_HELPER_SETTINGS_ACTIVITY) {
-            GAME_HELPER_SETTINGS_ICON_RES
-        } else {
-            GAME_HELPER_ICON_RES
-        }
-
-        resolveDrawableResource(resources, iconName).takeIf { it != 0 }?.let {
-            info.icon = it
-        }
-
-        resolveDrawableResource(resources, GAME_HELPER_ROUND_ICON_RES).takeIf { it != 0 }?.let {
-            setRoundIconResource(info, it)
-        }
-
-        resolveDrawableResource(resources, GAME_HELPER_SETTINGS_ICON_RES).takeIf { it != 0 }?.let { settingsIcon ->
-            if (info.metaData == null) {
-                info.metaData = Bundle()
-            }
-            info.metaData?.putInt(SETTINGS_ICON_META_KEY, settingsIcon)
-        }
-
-        return info
-    }
-
-    private fun PackageParam.installClientPackageManagerHooks() {
-        findClass("android.content.pm.PackageItemInfo").hook {
-            injectMember {
-                method {
-                    name = "loadLabel"
-                    param(PackageManager::class.java)
-                }
-                replaceAny {
-                    resolveClientLabel(
-                        target = instanceOrNull,
-                        packageManager = args.firstOrNull() as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "loadIcon"
-                    param(PackageManager::class.java)
-                }
-                replaceAny {
-                    resolveClientIcon(
-                        target = instanceOrNull,
-                        packageManager = args.firstOrNull() as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-        }
-
-        findClass("android.app.ApplicationPackageManager").hook {
-            injectMember {
-                method {
-                    name = "getApplicationLabel"
-                    param(ApplicationInfo::class.java)
-                }
-                replaceAny {
-                    resolveClientLabel(
-                        target = args.firstOrNull(),
-                        packageManager = instanceOrNull as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "getApplicationIcon"
-                    param(ApplicationInfo::class.java)
-                }
-                replaceAny {
-                    resolveClientIcon(
-                        target = args.firstOrNull(),
-                        packageManager = instanceOrNull as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "getApplicationIcon"
-                    param(String::class.java)
-                }
-                replaceAny {
-                    resolveClientIcon(
-                        target = args.firstOrNull(),
-                        packageManager = instanceOrNull as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "getActivityIcon"
-                    param(ComponentName::class.java)
-                }
-                replaceAny {
-                    resolveClientIcon(
-                        target = args.firstOrNull(),
-                        packageManager = instanceOrNull as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "getActivityIcon"
-                    param(Intent::class.java)
-                }
-                replaceAny {
-                    resolveClientIcon(
-                        target = args.firstOrNull(),
-                        packageManager = instanceOrNull as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "loadItemIcon"
-                    param(android.content.pm.PackageItemInfo::class.java, ApplicationInfo::class.java)
-                }
-                replaceAny {
-                    resolveClientIcon(
-                        target = args.firstOrNull(),
-                        packageManager = instanceOrNull as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-        }
-
-        findClass("android.content.pm.ResolveInfo").hook {
-            injectMember {
-                method {
-                    name = "loadLabel"
-                    param(PackageManager::class.java)
-                }
-                replaceAny {
-                    resolveClientLabel(
-                        target = instanceOrNull,
-                        packageManager = args.firstOrNull() as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "loadIcon"
-                    param(PackageManager::class.java)
-                }
-                replaceAny {
-                    resolveClientIcon(
-                        target = instanceOrNull,
-                        packageManager = args.firstOrNull() as? PackageManager,
-                    ) ?: callOriginal()
-                }
-            }
-        }
-
-        findClass("android.content.pm.LauncherActivityInfo").hook {
-            injectMember {
-                method {
-                    name = "getLabel"
-                    emptyParam()
-                }
-                replaceAny {
-                    resolveClientLabel(target = instanceOrNull, packageManager = null) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "getIcon"
-                    param(Int::class.javaPrimitiveType!!)
-                }
-                replaceAny {
-                    resolveClientIcon(target = instanceOrNull, packageManager = null) ?: callOriginal()
-                }
-            }
-            injectMember {
-                method {
-                    name = "getBadgedIcon"
-                    param(Int::class.javaPrimitiveType!!)
-                }
-                replaceAny {
-                    resolveClientIcon(target = instanceOrNull, packageManager = null) ?: callOriginal()
-                }
-            }
-        }
-    }
-
-    private fun resolveClientLabel(target: Any?, packageManager: PackageManager?): CharSequence? {
-        if (resolveTargetPackageName(target) != GAME_HELPER_PACKAGE) return null
-        return resolveStringResource(loadGameHelperResources(packageManager) ?: return null, GAME_HELPER_LABEL_RES)
-    }
-
-    private fun resolveClientIcon(target: Any?, packageManager: PackageManager?): Drawable? {
-        if (resolveTargetPackageName(target) != GAME_HELPER_PACKAGE) return null
-
-        val iconName = if (resolveTargetClassName(target) == GAME_HELPER_SETTINGS_ACTIVITY) {
-            GAME_HELPER_SETTINGS_ICON_RES
-        } else {
-            GAME_HELPER_ICON_RES
-        }
-
-        val resources = loadGameHelperResources(packageManager) ?: return null
-        val resId = resolveDrawableResource(resources, iconName)
-        if (resId == 0) return null
-
-        return runCatching {
-            (packageManager ?: resolveProcessApplicationContext()?.packageManager)
-                ?.getDrawable(GAME_HELPER_PACKAGE, resId, null)
-        }.getOrNull()
-    }
-
-    private fun loadGameHelperResources(packageManager: PackageManager?): Resources? {
-        val pm = packageManager ?: resolveProcessApplicationContext()?.packageManager ?: return null
-        return runCatching { pm.getResourcesForApplication(GAME_HELPER_PACKAGE) }.getOrNull()
-    }
-
-    private fun resolveTargetPackageName(target: Any?): String? {
-        return when (target) {
-            is ResolveInfo -> target.activityInfo?.packageName ?: target.resolvePackageName
-            is ComponentName -> target.packageName
-            is Intent -> target.component?.packageName ?: target.`package`
-            is String -> target
-            else -> runCatching { XposedHelpers.getObjectField(target, "packageName") as? String }.getOrNull()
-                ?: runCatching {
-                    val componentName = XposedHelpers.callMethod(target, "getComponentName") as? android.content.ComponentName
-                    componentName?.packageName
-                }.getOrNull()
-        }
-    }
-
-    private fun resolveTargetClassName(target: Any?): String? {
-        return when (target) {
-            is ResolveInfo -> target.activityInfo?.name
-            is ComponentName -> target.className
-            is Intent -> target.component?.className
-            else -> runCatching { XposedHelpers.getObjectField(target, "name") as? String }.getOrNull()
-                ?: runCatching {
-                    val componentName = XposedHelpers.callMethod(target, "getComponentName") as? android.content.ComponentName
-                    componentName?.className
-                }.getOrNull()
-        }
-    }
-
     private fun resolveKeyContainerFeatureKey(container: Any?): String? {
         return runCatching { XposedHelpers.callMethod(container, "getKEY") as? String }.getOrNull()
     }
@@ -1782,10 +1305,6 @@ class MainHook : IYukiHookXposedInit {
             ?: resolveProcessApplicationContext()?.javaClass?.classLoader
     }
 
-    private fun hasField(clazz: Class<*>, name: String): Boolean {
-        return runCatching { XposedHelpers.findField(clazz, name) != null }.getOrDefault(false)
-    }
-
     private fun hasMethodWithParamCount(
         className: String,
         methodName: String,
@@ -1801,32 +1320,6 @@ class MainHook : IYukiHookXposedInit {
                 it.name == methodName && it.parameterTypes.size == paramCount
             }
         }.getOrDefault(false)
-    }
-
-    private fun resolveStringResource(resources: Resources, name: String): String? {
-        val resId = resources.getIdentifier(name, "string", GAME_HELPER_PACKAGE)
-        if (resId == 0) return null
-        return runCatching { resources.getString(resId) }.getOrNull()
-    }
-
-    private fun resolveDrawableResource(resources: Resources, name: String): Int {
-        val mipmapRes = resources.getIdentifier(name, "mipmap", GAME_HELPER_PACKAGE)
-        if (mipmapRes != 0) return mipmapRes
-        return resources.getIdentifier(name, "drawable", GAME_HELPER_PACKAGE)
-    }
-
-    private fun setRoundIconResource(info: Any, resId: Int) {
-        val fieldName = when {
-            hasField(info.javaClass, "roundIconRes") -> "roundIconRes"
-            hasField(info.javaClass, "roundIcon") -> "roundIcon"
-            else -> null
-        } ?: return
-
-        runCatching {
-            XposedHelpers.setIntField(info, fieldName, resId)
-        }.onFailure {
-            AndroidInternals.log("Failed to set round icon resource for $GAME_HELPER_PACKAGE", it)
-        }
     }
 
     private fun resolveProcessApplicationContext(): Context? {
