@@ -16,6 +16,9 @@ object SupportedPackageList {
     // survives reboots and module reinstalls.
     const val RUNTIME_STATE_DIR = "/data/adb/$MODULE_ID"
     const val RUNTIME_LIST_PATH = "$RUNTIME_STATE_DIR/gpp_app_list"
+    // Snapshot the device's stock whitelist before any runtime bind-mount is
+    // applied so GAP can always restore the original default.
+    const val STOCK_LIST_PATH = "$RUNTIME_STATE_DIR/gpp_app_list.stock"
     // Keep the legacy module path for migration and compatibility with older
     // service.sh revisions that still expect the list under the module tree.
     const val MODULE_LIST_PATH = "/data/adb/modules/$MODULE_ID/system/etc/gpp_app_list"

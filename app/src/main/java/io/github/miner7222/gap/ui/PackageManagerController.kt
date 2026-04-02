@@ -26,30 +26,36 @@ object PackageManagerController {
     private const val PREF_BASELINE_PACKAGES = "baseline_packages"
 
     fun ensureBaselinePackages(context: Context): Set<String> {
-        // Cache the device-default list the first time GAP runs so "Reset" can
-        // return to stock behavior even after the active list has been overridden.
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.getStringSet(PREF_BASELINE_PACKAGES, null)?.let { stored ->
-            if (stored.isNotEmpty()) {
-                return LinkedHashSet(stored)
+        val storedBaseline = prefs.getStringSet(PREF_BASELINE_PACKAGES, null)
+            ?.takeIf { it.isNotEmpty() }
+            ?.let(::LinkedHashSet)
+        val runtimeOverride = hasRuntimeOverride()
+        val deviceDefaultPackages = readDeviceDefaultPackages(runtimeOverride)
+
+        if (deviceDefaultPackages.isNotEmpty()) {
+            if (storedBaseline != deviceDefaultPackages) {
+                prefs.edit().putStringSet(PREF_BASELINE_PACKAGES, deviceDefaultPackages).apply()
+            }
+            return deviceDefaultPackages
+        }
+
+        if (storedBaseline != null) {
+            return storedBaseline
+        }
+
+        // If no runtime override exists, the active list still reflects the
+        // stock device default. Bootstrap the baseline from that state once.
+        if (!runtimeOverride) {
+            val activePackages = readSelectedPackages()
+            if (activePackages.isNotEmpty()) {
+                prefs.edit().putStringSet(PREF_BASELINE_PACKAGES, activePackages).apply()
+                return activePackages
             }
         }
 
-        // Older builds could cache an empty baseline when the app-side direct
-        // file read hit a bind-mounted/root-owned whitelist. Repair that state
-        // by re-reading the active list through root. If a runtime override is
-        // currently active, use the result for display only and wait for a
-        // stock run before persisting it as the device default.
-        val baseline = readSelectedPackages()
-        if (baseline.isEmpty()) {
-            prefs.edit().remove(PREF_BASELINE_PACKAGES).apply()
-            return emptySet()
-        }
-
-        if (!hasRuntimeOverride()) {
-            prefs.edit().putStringSet(PREF_BASELINE_PACKAGES, baseline).apply()
-        }
-        return baseline
+        prefs.edit().remove(PREF_BASELINE_PACKAGES).apply()
+        return emptySet()
     }
 
     fun loadEntries(context: Context): Pair<Set<String>, List<PackageEntry>> {
@@ -67,7 +73,8 @@ object PackageManagerController {
             // or currently uninstalled.
             .filter { appInfo ->
                 packageManager.getLaunchIntentForPackage(appInfo.packageName) != null ||
-                    activePackages.contains(appInfo.packageName)
+                    activePackages.contains(appInfo.packageName) ||
+                    baselinePackages.contains(appInfo.packageName)
             }
             .forEach { appInfo ->
                 val packageName = appInfo.packageName
@@ -91,6 +98,20 @@ object PackageManagerController {
                 applicationInfo = null,
                 installed = false,
                 selected = true,
+            )
+        }
+
+        baselinePackages.forEach { packageName ->
+            if (entriesByPackage.containsKey(packageName)) {
+                return@forEach
+            }
+
+            entriesByPackage[packageName] = PackageEntry(
+                label = packageName,
+                packageName = packageName,
+                applicationInfo = null,
+                installed = false,
+                selected = false,
             )
         }
 
@@ -126,6 +147,38 @@ object PackageManagerController {
         if (result.exitCode != 0) {
             throw IllegalStateException(
                 result.output.ifBlank { "Could not read active gpp_app_list (exit ${result.exitCode})" },
+            )
+        }
+        return SupportedPackageList.parsePackages(result.output)
+    }
+
+    private fun readDeviceDefaultPackages(runtimeOverride: Boolean): Set<String> {
+        val fallbackToActive = if (runtimeOverride) "0" else "1"
+        val result = RootShell.run(
+            """
+            MAGISK_MIRROR=''
+            if command -v magisk >/dev/null 2>&1; then
+              MAGISK_BASE=$(magisk --path 2>/dev/null || true)
+              if [ -n "${'$'}MAGISK_BASE" ] && [ -f "${'$'}MAGISK_BASE/.magisk/mirror/system/etc/gpp_app_list" ]; then
+                MAGISK_MIRROR="${'$'}MAGISK_BASE/.magisk/mirror/system/etc/gpp_app_list"
+              fi
+            fi
+            if [ -f '${SupportedPackageList.STOCK_LIST_PATH}' ]; then
+              cat '${SupportedPackageList.STOCK_LIST_PATH}'
+            elif [ -n "${'$'}MAGISK_MIRROR" ]; then
+              cat "${'$'}MAGISK_MIRROR"
+            elif [ -f '/debug_ramdisk/.magisk/mirror/system/etc/gpp_app_list' ]; then
+              cat '/debug_ramdisk/.magisk/mirror/system/etc/gpp_app_list'
+            elif [ -f '/sbin/.magisk/mirror/system/etc/gpp_app_list' ]; then
+              cat '/sbin/.magisk/mirror/system/etc/gpp_app_list'
+            elif [ '$fallbackToActive' = '1' ] && [ -f '${SupportedPackageList.ACTIVE_LIST_PATH}' ]; then
+              cat '${SupportedPackageList.ACTIVE_LIST_PATH}'
+            fi
+            """.trimIndent(),
+        )
+        if (result.exitCode != 0) {
+            throw IllegalStateException(
+                result.output.ifBlank { "Could not read stock gpp_app_list (exit ${result.exitCode})" },
             )
         }
         return SupportedPackageList.parsePackages(result.output)
