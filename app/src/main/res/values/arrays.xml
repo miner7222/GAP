@@ -2,9 +2,6 @@
 <resources>
     <string-array name="module_scope">
         <item>android</item>
-        <item>com.android.settings</item>
-        <item>com.android.launcher3</item>
         <item>com.zui.game.service</item>
-        <item>com.zui.launcher</item>
     </string-array>
 </resources>
