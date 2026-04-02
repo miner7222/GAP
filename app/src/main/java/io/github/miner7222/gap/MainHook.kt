@@ -46,7 +46,8 @@ class MainHook : IYukiHookXposedInit {
         private const val GAME_HELPER_SETTINGS_ICON_RES = "ic_game_assistant_svg"
         private const val GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY = "option_item_colorful_light"
         private const val SETTINGS_ICON_META_KEY = "com.android.settings.icon"
-        private val AI_SOUND_SUPPORTED_PACKAGES = linkedSetOf(
+        private const val PUBG_VIBRATION_SHARED_KEY = "game.pubg.mobile"
+        private val PUBG_VARIANT_PACKAGES = linkedSetOf(
             "com.tencent.ig",
             "com.tencent.tmgp.pubgmhd",
             "com.rekoo.pubgm",
@@ -54,6 +55,7 @@ class MainHook : IYukiHookXposedInit {
             "com.vng.pubgmobile",
             "com.pubg.imobile",
         )
+        private val AI_SOUND_SUPPORTED_PACKAGES = LinkedHashSet(PUBG_VARIANT_PACKAGES)
     }
 
     private val systemHooksInstalled = AtomicBoolean(false)
@@ -187,6 +189,10 @@ class MainHook : IYukiHookXposedInit {
         // Normalize AI sound package gating so both PUBG package names work
         // regardless of the device's ROW region flag.
         installAiSoundEnhancementHooks()
+        // Wide Vision and 4D vibration still keep separate regional lists in
+        // stock Game Helper, so merge them at runtime.
+        installWideVisionHooks()
+        installVibrationSupportHooks()
 
         AndroidInternals.log("Installed YukiHook game helper hooks")
     }
@@ -575,6 +581,62 @@ class MainHook : IYukiHookXposedInit {
         hookAiSoundFloatingNotice()
     }
 
+    private fun PackageParam.installWideVisionHooks() {
+        val className = "com.zui.ugame.gamesetting.ui.options.content.widevision.MoreGameViewModel"
+        val methodName = "<init>"
+        if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
+            AndroidInternals.log("Skip missing $className#$methodName/2 in Game Helper")
+            return
+        }
+
+        findClass(className).hook {
+            injectMember {
+                method {
+                    name = methodName
+                    paramCount = 2
+                }
+                afterHook {
+                    mergeWideVisionKnownGames(instanceOrNull)
+                }
+            }
+        }
+    }
+
+    private fun PackageParam.installVibrationSupportHooks() {
+        val className = "com.zui.game.service.vibrate.VibrationToolKt"
+        val methodName = "isGameSupport4dVibration"
+        if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
+            AndroidInternals.log("Skip missing $className#$methodName/2 in Game Helper")
+            return
+        }
+
+        findClass(className).hook {
+            injectMember {
+                method {
+                    name = methodName
+                    paramCount = 2
+                }
+                replaceAny {
+                    val context = args.firstOrNull() as? Context
+                    val packageName = args.getOrNull(1) as? String
+                    val original = runCatching {
+                        @Suppress("UNCHECKED_CAST")
+                        (callOriginal() as? List<Any?>) ?: emptyList()
+                    }.getOrElse {
+                        AndroidInternals.log("Failed to call original $className#$methodName", it)
+                        emptyList()
+                    }
+
+                    if (context == null) {
+                        return@replaceAny original.mapNotNull { it as? String }
+                    }
+
+                    mergeVibrationSupportKeys(context, packageName, original)
+                }
+            }
+        }
+    }
+
     private fun PackageParam.hookAiSoundItemInitialization() {
         val className = "com.zui.game.service.sys.item.ItemAISoundEnhancement"
         val methodName = "initFromSavedState"
@@ -826,6 +888,99 @@ class MainHook : IYukiHookXposedInit {
         }
 
         writeAiSoundSetting(context, if (enable) 1 else 0)
+    }
+
+    private fun mergeWideVisionKnownGames(viewModel: Any?) {
+        if (viewModel == null) return
+
+        val knownGames = readStringArrayField(viewModel, "knownGames")
+        val rowKnownGames = readStringArrayField(viewModel, "rowKnownGames")
+        val merged = mergeStringArrays(knownGames, rowKnownGames)
+        if (merged.isEmpty()) return
+
+        runCatching {
+            XposedHelpers.setObjectField(viewModel, "knownGames", merged)
+            XposedHelpers.setObjectField(viewModel, "rowKnownGames", merged)
+        }.onFailure {
+            AndroidInternals.log("Failed to merge Wide Vision knownGames lists", it)
+        }
+    }
+
+    private fun mergeVibrationSupportKeys(
+        context: Context,
+        packageName: String?,
+        original: List<Any?>,
+    ): List<String> {
+        val merged = LinkedHashSet<String>()
+        original.mapNotNullTo(merged) { it as? String }
+
+        val normalizedPackage = packageName?.takeIf { it.isNotBlank() } ?: return merged.toList()
+        resolveVibrationResourceMatches(context, normalizedPackage).forEach { merged += it }
+        if (normalizedPackage in PUBG_VARIANT_PACKAGES) {
+            merged += PUBG_VIBRATION_SHARED_KEY
+        }
+
+        return merged.toList()
+    }
+
+    private fun resolveVibrationResourceMatches(context: Context, packageName: String): Set<String> {
+        val merged = LinkedHashSet<String>()
+        val resources = context.resources
+
+        resolveVibrationSupportArrayIds(context).forEach { resId ->
+            runCatching { resources.getStringArray(resId) }
+                .onFailure { AndroidInternals.log("Failed to read vibration support array $resId", it) }
+                .getOrNull()
+                ?.forEach { candidate ->
+                    if (packageName.contains(candidate)) {
+                        merged += candidate
+                    }
+                }
+        }
+
+        return merged
+    }
+
+    private fun resolveVibrationSupportArrayIds(context: Context): Set<Int> {
+        val classLoader = resolveGameHelperClassLoader() ?: context.classLoader
+
+        return runCatching {
+            val featuresClass = XposedHelpers.findClass(
+                "com.zui.game.service.FeaturesBaseOnRomKt",
+                classLoader,
+            )
+            val romFeatures = XposedHelpers.callStaticMethod(featuresClass, "getRomFeatures")
+            linkedSetOf(
+                XposedHelpers.callMethod(romFeatures, "getSupportVibrationGameListArrayId") as? Int,
+                XposedHelpers.callMethod(romFeatures, "getSupportVibrationGameListArrayIdRow") as? Int,
+            ).filterNotNull().toSet()
+        }.getOrElse {
+            AndroidInternals.log("Failed to resolve vibration support array ids", it)
+            emptySet()
+        }
+    }
+
+    private fun readStringArrayField(target: Any, fieldName: String): Array<String> {
+        return runCatching {
+            @Suppress("UNCHECKED_CAST")
+            ((XposedHelpers.getObjectField(target, fieldName) as? Array<*>)?.mapNotNull { it as? String }?.toTypedArray())
+                ?: emptyArray()
+        }.getOrElse {
+            AndroidInternals.log("Failed to read $fieldName from ${target.javaClass.name}", it)
+            emptyArray()
+        }
+    }
+
+    private fun mergeStringArrays(vararg arrays: Array<String>): Array<String> {
+        val merged = LinkedHashSet<String>()
+        arrays.forEach { array ->
+            array.forEach { value ->
+                if (value.isNotBlank()) {
+                    merged += value
+                }
+            }
+        }
+        return merged.toTypedArray()
     }
 
     private fun HookParam.resolveRegisteredGamePackagesOrOriginal(source: String): Any? {
