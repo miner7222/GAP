@@ -33,6 +33,9 @@ class MainHook : IYukiHookXposedInit {
     private companion object {
         private const val GAME_HELPER_PACKAGE = "com.zui.game.service"
         private const val SUPER_RESOLUTION_FEATURE_KEY = "key_super_resolution"
+        private const val FOUR_D_VIBRATE_FEATURE_KEY = "key_4d_vibrate"
+        private const val WIDE_VISION_FEATURE_KEY = "key_wide_vision"
+        private const val LIVE_PICTURE_FEATURE_KEY = "key_live_picture"
         private const val AI_SOUND_SETTING_KEY = "key_game_aisound"
         private const val AI_SOUND_PARAMETER_ENABLED = "aisound=true"
         private const val AI_SOUND_PARAMETER_DISABLED = "aisound=false"
@@ -330,6 +333,7 @@ class MainHook : IYukiHookXposedInit {
                 replaceAny {
                     when (args.firstOrNull() as? String) {
                         SUPER_RESOLUTION_FEATURE_KEY -> true
+                        FOUR_D_VIBRATE_FEATURE_KEY -> true
                         COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
                         else -> callOriginal()
                     }
@@ -359,6 +363,7 @@ class MainHook : IYukiHookXposedInit {
                 replaceAny {
                     when (resolveKeyContainerFeatureKey(instanceOrNull)) {
                         SUPER_RESOLUTION_FEATURE_KEY -> true
+                        FOUR_D_VIBRATE_FEATURE_KEY -> true
                         COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
                         else -> callOriginal()
                     }
@@ -1151,8 +1156,19 @@ class MainHook : IYukiHookXposedInit {
             when {
                 key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard() -> return@forEach
                 key == SUPER_RESOLUTION_FEATURE_KEY && !shouldExposeSuperResolution(packageName) -> return@forEach
+                key == FOUR_D_VIBRATE_FEATURE_KEY && !shouldExposeFourDVibration(controller, packageName) -> return@forEach
             }
             normalized += item
+        }
+
+        if (
+            shouldExposeFourDVibration(controller, packageName) &&
+            normalized.none { resolveItemKey(it) == FOUR_D_VIBRATE_FEATURE_KEY }
+        ) {
+            resolveFourDVibrationItem(controller)?.let { item ->
+                insertFloatingItemByFeatureOrder(normalized, item, resolveCurrentRomFeatureOrder())
+                AndroidInternals.log("Reinserted 4D vibration button for $packageName from $source")
+            }
         }
 
         if (!hasSameKeys(currentItems, normalized)) {
@@ -1230,6 +1246,85 @@ class MainHook : IYukiHookXposedInit {
 
     private fun resolveItemKey(item: Any?): String? {
         return runCatching { XposedHelpers.callMethod(item, "getKey") as? String }.getOrNull()
+    }
+
+    private fun insertFloatingItemByFeatureOrder(
+        items: MutableList<Any>,
+        item: Any,
+        featureOrder: List<String>,
+    ) {
+        val itemKey = resolveItemKey(item) ?: run {
+            items += item
+            return
+        }
+        val targetOrder = featureOrder.indexOf(itemKey)
+        if (targetOrder < 0) {
+            items += item
+            return
+        }
+
+        val insertIndex = items.indexOfFirst { existing ->
+            val existingOrder = featureOrder.indexOf(resolveItemKey(existing))
+            existingOrder > targetOrder
+        }.takeIf { it >= 0 } ?: items.size
+
+        items.add(insertIndex, item)
+    }
+
+    private fun shouldExposeFourDVibration(controller: Any?, packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+
+        val support = runCatching {
+            val classLoader = resolveGameHelperClassLoader() ?: return false
+            val context = runCatching {
+                XposedHelpers.callMethod(controller, "getContext") as? Context
+            }.getOrNull() ?: return false
+            val vibrationToolClass = XposedHelpers.findClass(
+                "com.zui.game.service.vibrate.VibrationToolKt",
+                classLoader,
+            )
+            @Suppress("UNCHECKED_CAST")
+            XposedHelpers.callStaticMethod(
+                vibrationToolClass,
+                "isGameSupport4dVibration",
+                context,
+                packageName,
+            ) as? List<Any?>
+        }.getOrElse {
+            AndroidInternals.log("Failed to resolve 4D vibration support for $packageName", it)
+            null
+        }
+
+        return !support.isNullOrEmpty()
+    }
+
+    private fun resolveFourDVibrationItem(controller: Any?): Any? {
+        return runCatching {
+            XposedHelpers.callMethod(controller, "getMItem4DVibrate")
+        }.getOrElse {
+            AndroidInternals.log("Failed to resolve Item4DVibrate instance", it)
+            null
+        }
+    }
+
+    private fun resolveCurrentRomFeatureOrder(): List<String> {
+        return runCatching {
+            val classLoader = resolveGameHelperClassLoader() ?: return emptyList()
+            val featuresClass = XposedHelpers.findClass(
+                "com.zui.game.service.FeaturesBaseOnRomKt",
+                classLoader,
+            )
+            val romFeatures = XposedHelpers.callStaticMethod(featuresClass, "getRomFeatures")
+            @Suppress("UNCHECKED_CAST")
+            (XposedHelpers.getObjectField(romFeatures, "keyList") as? List<Any?>)
+                ?.mapNotNull { featureKey ->
+                    runCatching { XposedHelpers.callMethod(featureKey, "getKey") as? String }.getOrNull()
+                }
+                ?: emptyList()
+        }.getOrElse {
+            AndroidInternals.log("Failed to resolve current RomFeatures key order", it)
+            emptyList()
+        }
     }
 
     private fun hasSameKeys(before: List<Any>, after: List<Any>): Boolean {
@@ -1612,7 +1707,24 @@ class MainHook : IYukiHookXposedInit {
 
         if (!normalized.containsKey(SUPER_RESOLUTION_FEATURE_KEY)) {
             createFeatureKeys(arrayOf(SUPER_RESOLUTION_FEATURE_KEY)).firstOrNull()?.let { featureKey ->
-                normalized[SUPER_RESOLUTION_FEATURE_KEY] = featureKey
+                insertFeatureKey(
+                    normalized = normalized,
+                    key = SUPER_RESOLUTION_FEATURE_KEY,
+                    featureKey = featureKey,
+                    beforeKeys = listOf(LIVE_PICTURE_FEATURE_KEY, COLORFUL_LIGHT_FEATURE_KEY),
+                )
+            }
+        }
+
+        if (!normalized.containsKey(FOUR_D_VIBRATE_FEATURE_KEY)) {
+            createFeatureKeys(arrayOf(FOUR_D_VIBRATE_FEATURE_KEY)).firstOrNull()?.let { featureKey ->
+                insertFeatureKey(
+                    normalized = normalized,
+                    key = FOUR_D_VIBRATE_FEATURE_KEY,
+                    featureKey = featureKey,
+                    beforeKeys = listOf(WIDE_VISION_FEATURE_KEY, COLORFUL_LIGHT_FEATURE_KEY),
+                    afterKeys = listOf(LIVE_PICTURE_FEATURE_KEY),
+                )
             }
         }
 
@@ -1620,6 +1732,35 @@ class MainHook : IYukiHookXposedInit {
             XposedHelpers.setObjectField(romFeatures, "keyList", ArrayList(normalized.values))
         }.onFailure {
             AndroidInternals.log("Failed to overwrite RomFeatures key list", it)
+        }
+    }
+
+    private fun insertFeatureKey(
+        normalized: LinkedHashMap<String, Any>,
+        key: String,
+        featureKey: Any,
+        beforeKeys: List<String> = emptyList(),
+        afterKeys: List<String> = emptyList(),
+    ) {
+        if (normalized.containsKey(key)) return
+
+        val entries = normalized.entries.map { it.key to it.value }.toMutableList()
+        val beforeIndex = beforeKeys
+            .map { anchor -> entries.indexOfFirst { it.first == anchor } }
+            .filter { it >= 0 }
+            .minOrNull()
+
+        val afterIndex = afterKeys
+            .map { anchor -> entries.indexOfFirst { it.first == anchor } }
+            .filter { it >= 0 }
+            .maxOrNull()
+
+        val insertIndex = beforeIndex ?: afterIndex?.plus(1) ?: entries.size
+        entries.add(insertIndex, key to featureKey)
+
+        normalized.clear()
+        entries.forEach { (entryKey, entryValue) ->
+            normalized[entryKey] = entryValue
         }
     }
 
