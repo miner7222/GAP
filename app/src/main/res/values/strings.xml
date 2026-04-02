@@ -2,7 +2,7 @@
     <string name="app_name" translatable="false">GAP</string>
     <string name="app_subtitle" translatable="false">Game Assistant Plus</string>
     <string name="module_description">Provides extra features for Lenovo Game Assistant.</string>
-    <string name="package_manager_description">Select the packages that should stay in the active LSR whitelist. GAP asks for root on launch because saving rewrites gpp_app_list, restarts gppservice, and force-stops ZuiGameHelper so the change takes effect immediately.</string>
+    <string name="package_manager_description">Select the games where Ultra HD Vision should be enabled. Games that are not supported by default may behave unstably.</string>
     <string name="search_hint">Search packages</string>
     <string name="save_button">Save</string>
     <string name="reset_button">Reset to Device Default</string>
@@ -16,7 +16,7 @@
     <string name="filters_menu">Filters</string>
     <string name="show_not_installed_packages">Show not-installed packages</string>
     <string name="root_required_title">Root Required</string>
-    <string name="root_required_message">GAP needs root access when it opens so it can save changes immediately. Grant root access and try again.</string>
+    <string name="root_required_message">Grant GAP ROOT access and try again.</string>
     <string name="retry_button">Retry</string>
     <string name="close_button">Close</string>
     <string name="update_available_title">Update available: %1$s</string>

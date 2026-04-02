@@ -1,6 +1,6 @@
 <resources>
     <string name="module_description">레노버 게임 어시스턴트에 추가 기능을 제공하는 모듈입니다.</string>
-    <string name="package_manager_description">LSR 화이트리스트에 유지할 패키지를 직접 선택하세요. 저장하면 런타임용 gpp_app_list 오버레이를 갱신하고 gppservice를 재시작한 뒤 ZuiGameHelper를 강제 종료해서 변경 사항이 바로 반영되게 합니다.</string>
+    <string name="package_manager_description">울트라 HD 비전을 활성화할 게임을 선택하세요. 기본적으로 지원하지 않는 게임에서는 불안정하게 작동할 수 있습니다.</string>
     <string name="search_hint">패키지 검색</string>
     <string name="save_button">저장</string>
     <string name="reset_button">기기 기본값으로 복원</string>
@@ -13,8 +13,8 @@
     <string name="no_results">검색 조건에 맞는 패키지가 없습니다.</string>
     <string name="filters_menu">필터</string>
     <string name="show_not_installed_packages">설치되지 않은 패키지 표시</string>
-    <string name="root_required_title">루트 권한 필요</string>
-    <string name="root_required_message">저장 즉시 변경 사항을 반영하려면 GAP이 실행될 때 루트 권한이 필요합니다. 루트 권한을 허용한 뒤 다시 시도하세요.</string>
+    <string name="root_required_title">ROOT 권한 필요</string>
+    <string name="root_required_message">GAP에 ROOT 권한을 부여한 뒤 다시 시도하세요.</string>
     <string name="retry_button">다시 시도</string>
     <string name="close_button">닫기</string>
     <string name="update_available_title">업데이트 가능: %1$s</string>
