@@ -5,7 +5,7 @@
     <string name="package_manager_description">Select the games where Ultra HD Vision should be enabled. Games that are not supported by default may behave unstably.</string>
     <string name="search_hint">Search packages</string>
     <string name="save_button">Save</string>
-    <string name="reset_button">Reset to Device Default</string>
+    <string name="restore_defaults_action">Restore defaults</string>
     <string name="selection_summary">%1$d packages selected · device default %2$d</string>
     <string name="package_name_not_installed">%1$s · not currently installed</string>
     <string name="save_success_custom">Services restarted.</string>

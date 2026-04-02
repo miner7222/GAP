@@ -69,8 +69,8 @@ class MainActivity : AppCompatActivity() {
             currentQuery = it?.toString().orEmpty()
             applyFilter()
         }
-        binding.resetButton.setOnClickListener { resetToBaseline() }
         binding.saveButton.setOnClickListener { saveSelection() }
+        syncMenuState(isBusy = false)
         installSystemBarInsets()
 
         requestRootAndLoadPackages()
@@ -174,8 +174,13 @@ class MainActivity : AppCompatActivity() {
         return when (itemId) {
             R.id.action_show_not_installed -> {
                 showNotInstalledPackages = !showNotInstalledPackages
-                binding.toolbar.menu.findItem(R.id.action_show_not_installed)?.isChecked = showNotInstalledPackages
+                syncMenuState(isBusy = binding.progressIndicator.isVisible)
                 applyFilter()
+                true
+            }
+
+            R.id.action_restore_defaults -> {
+                resetToBaseline()
                 true
             }
 
@@ -252,14 +257,23 @@ class MainActivity : AppCompatActivity() {
         val baselineCount = baselinePackages.size
         binding.summary.text = getString(R.string.selection_summary, selectedCount, baselineCount)
         binding.saveButton.isEnabled = !binding.progressIndicator.isVisible
-        binding.resetButton.isEnabled = !binding.progressIndicator.isVisible && selectedPackages != baselinePackages
+        syncMenuState(isBusy = binding.progressIndicator.isVisible)
     }
 
     private fun setBusy(isBusy: Boolean) {
         binding.progressIndicator.isVisible = isBusy
         binding.saveButton.isEnabled = !isBusy
-        binding.resetButton.isEnabled = !isBusy && selectedPackages != baselinePackages
         binding.searchLayout.isEnabled = !isBusy
+        syncMenuState(isBusy = isBusy)
+    }
+
+    private fun syncMenuState(isBusy: Boolean) {
+        binding.toolbar.menu.findItem(R.id.action_show_not_installed)?.apply {
+            isChecked = showNotInstalledPackages
+            isEnabled = !isBusy
+        }
+        binding.toolbar.menu.findItem(R.id.action_restore_defaults)?.isEnabled =
+            !isBusy && selectedPackages != baselinePackages
     }
 
     private fun showRootAccessDialog() {

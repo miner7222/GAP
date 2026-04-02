@@ -8,4 +8,9 @@
         android:title="@string/show_not_installed_packages"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_restore_defaults"
+        android:title="@string/restore_defaults_action"
+        app:showAsAction="never" />
+
 </menu>
