@@ -16,6 +16,8 @@ import androidx.core.view.updatePadding
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.github.miner7222.gap.BuildConfig
+import io.github.miner7222.gap.DeviceCompatibility
+import io.github.miner7222.gap.DeviceCompatibility.CompatibilityStatus
 import io.github.miner7222.gap.R
 import io.github.miner7222.gap.SupportedPackageList
 import io.github.miner7222.gap.databinding.ActivityMainBinding
@@ -38,6 +40,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!checkDeviceCompatibility()) {
+            return
+        }
 
         // The layout draws edge-to-edge, so the activity owns status/navigation
         // bar padding instead of relying on a theme with fixed system insets.
@@ -77,6 +82,21 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             checkForUpdates()
         }
+    }
+
+    private fun checkDeviceCompatibility(): Boolean {
+        val status = DeviceCompatibility.evaluate(
+            AppSystemProperties.get(DeviceCompatibility.ZUI_VERSION_PROPERTY),
+            AppSystemProperties.get(DeviceCompatibility.SOC_MODEL_PROPERTY),
+        )
+        val messageRes = when (status) {
+            CompatibilityStatus.SUPPORTED -> return true
+            CompatibilityStatus.UNSUPPORTED_OS_VERSION -> R.string.unsupported_os_version
+            CompatibilityStatus.UNSUPPORTED_SOC -> R.string.unsupported_soc
+        }
+        showToast(getString(messageRes))
+        finish()
+        return false
     }
 
     override fun onDestroy() {

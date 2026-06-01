@@ -95,8 +95,14 @@ public final class AndroidInternals {
             .contains(BALDUR_BOARD_MARKER);
     }
 
+    public static boolean hasNativeLsrService() {
+        return DeviceCompatibility.hasNativeLsrService(
+            getSystemProperty(DeviceCompatibility.SOC_MODEL_PROPERTY, "")
+        );
+    }
+
     public static boolean useCompatibilityLsr() {
-        return !isBaldurBoard();
+        return !isBaldurBoard() && !hasNativeLsrService();
     }
 
     public static void log(String message) {

@@ -116,7 +116,7 @@ class MainHook : IYukiHookXposedInit {
                 }
             }
         } else {
-            AndroidInternals.log("Skipping compatibility lenovosr bootstrap hooks on baldur")
+            AndroidInternals.log("Skipping compatibility lenovosr bootstrap hooks")
         }
 
         AndroidInternals.log("Installed YukiHook system_server hooks")
@@ -134,7 +134,7 @@ class MainHook : IYukiHookXposedInit {
             // Game Helper can still talk to the reconstructed compatibility service.
             installLsrServiceManagerFallback()
         } else {
-            AndroidInternals.log("Using stock lenovosr on baldur; compatibility fallback binder disabled")
+            AndroidInternals.log("Using stock/native lenovosr; compatibility fallback binder disabled")
         }
 
         if (!isBaldurBoard()) {
