@@ -248,6 +248,7 @@ object PackageManagerController {
             mkdir -p /data/adb/modules/${SupportedPackageList.MODULE_ID}/system/etc
             cat '${tempFilePath}' > '${SupportedPackageList.MODULE_LIST_PATH}'
             chmod 0644 '${SupportedPackageList.MODULE_LIST_PATH}'
+            chcon u:object_r:system_file:s0 '${SupportedPackageList.MODULE_LIST_PATH}' 2>/dev/null || true
             settings put global '${SupportedPackageList.RUNTIME_SETTINGS_KEY}' '${settingsValue}'
             """.trimIndent()
         } else {
@@ -260,6 +261,7 @@ object PackageManagerController {
         return """
             |#!/system/bin/sh
             |set -eu
+            |SOC_MODEL="$(getprop ro.soc.model 2>/dev/null | tr -d '\r')"
             |
             |if [ ! -d /data/adb/modules/${SupportedPackageList.MODULE_ID} ]; then
             |  echo "Magisk module not found: /data/adb/modules/${SupportedPackageList.MODULE_ID}" >&2
@@ -278,38 +280,57 @@ object PackageManagerController {
             |
             |bind_active_list() {
             |  unbind_active_list
-            |  SOURCE_LIST='${SupportedPackageList.RUNTIME_LIST_PATH}'
+            |  SOURCE_LIST='${SupportedPackageList.MODULE_LIST_PATH}'
             |  if [ ! -f "${'$'}SOURCE_LIST" ]; then
-            |    SOURCE_LIST='${SupportedPackageList.MODULE_LIST_PATH}'
+            |    SOURCE_LIST='${SupportedPackageList.RUNTIME_LIST_PATH}'
             |  fi
             |  if ! mount -o bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list 2>/dev/null; then
             |    mount --bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list
             |  fi
             |}
             |
-            |if [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ]; then
+            |if [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
             |  bind_active_list
-            |elif [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
+            |elif [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ]; then
             |  bind_active_list
             |else
             |  unbind_active_list
             |fi
             |
+            |restart_native_gppservice() {
+            |  stop vendor.gppservice 2>/dev/null || setprop ctl.stop vendor.gppservice 2>/dev/null || true
+            |  sleep 1
+            |  if pidof gppservice >/dev/null 2>&1; then
+            |    kill $(pidof gppservice) || true
+            |    sleep 1
+            |  fi
+            |  setprop vendor.gpp.create_frc_extension 1
+            |  start vendor.gppservice 2>/dev/null || setprop ctl.start vendor.gppservice 2>/dev/null || true
+            |  sleep 1
+            |}
+            |
+            |restart_compat_gppservice() {
+            |  if pidof gppservice >/dev/null 2>&1; then
+            |    kill $(pidof gppservice) || true
+            |    sleep 1
+            |  fi
+            |  start vendor.vppservice 2>/dev/null || true
+            |  chcon u:object_r:vendor_gppservice_exec:s0 /system/bin/gppservice 2>/dev/null || true
+            |  setprop vendor.gpp.create_frc_extension 1
+            |  runcon u:r:vendor_gppservice:s0 /system/bin/gppservice >/dev/null 2>&1 &
+            |  sleep 1
+            |  if ! pidof gppservice >/dev/null 2>&1; then
+            |    nohup /system/bin/gppservice >/dev/null 2>&1 &
+            |  fi
+            |}
+            |
             |# Restart the GPP userspace so it re-reads the active whitelist and
             |# startup-only FRC property, then force-stop Game Helper to drop any
             |# cached state tied to the old list.
-            |if pidof gppservice >/dev/null 2>&1; then
-            |  kill $(pidof gppservice) || true
-            |  sleep 1
-            |fi
-            |
-            |start vendor.vppservice 2>/dev/null || true
-            |chcon u:object_r:vendor_gppservice_exec:s0 /system/bin/gppservice 2>/dev/null || true
-            |setprop vendor.gpp.create_frc_extension 1
-            |runcon u:r:vendor_gppservice:s0 /system/bin/gppservice >/dev/null 2>&1 &
-            |sleep 1
-            |if ! pidof gppservice >/dev/null 2>&1; then
-            |  nohup /system/bin/gppservice >/dev/null 2>&1 &
+            |if [ "${'$'}SOC_MODEL" = 'SM8850P' ]; then
+            |  restart_native_gppservice
+            |elif [ "${'$'}SOC_MODEL" = 'SM8750P' ]; then
+            |  restart_compat_gppservice
             |fi
             |
             |am force-stop ${SupportedPackageList.GAME_HELPER_PACKAGE} || true
