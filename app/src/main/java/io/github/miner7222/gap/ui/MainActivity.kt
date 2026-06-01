@@ -108,12 +108,23 @@ class MainActivity : AppCompatActivity() {
         setBusy(true)
         executor.execute {
             val hasRootAccess = runCatching { RootShell.hasAccess() }.getOrDefault(false)
+            val moduleInstalled = if (hasRootAccess) {
+                runCatching { PackageManagerController.isLsrPortModuleInstalled() }
+            } else {
+                null
+            }
             runOnUiThread {
-                if (hasRootAccess) {
+                if (!hasRootAccess) {
+                    setBusy(false)
+                    showRootAccessDialog()
+                    return@runOnUiThread
+                }
+
+                if (moduleInstalled?.getOrDefault(false) == true) {
                     loadPackages()
                 } else {
                     setBusy(false)
-                    showRootAccessDialog()
+                    showLsrPortMissingDialog()
                 }
             }
         }
@@ -310,6 +321,20 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showLsrPortMissingDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.lsrport_missing_title)
+            .setMessage(R.string.lsrport_missing_message)
+            .setCancelable(false)
+            .setPositiveButton(R.string.download_button) { _, _ ->
+                openLsrPortReleases()
+            }
+            .setNegativeButton(R.string.exit_button) { _, _ ->
+                finish()
+            }
+            .show()
+    }
+
     private fun showUpdateDialog(release: ReleaseInfo) {
         val changelog = release.body.ifBlank { getString(R.string.update_no_changes) }
 
@@ -339,6 +364,18 @@ class MainActivity : AppCompatActivity() {
                 error.printStackTrace()
             }
             showToast(getString(R.string.update_open_failed))
+        }
+    }
+
+    private fun openLsrPortReleases() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(LsrPortModule.RELEASES_URL))
+        runCatching {
+            startActivity(intent)
+        }.onFailure { error ->
+            if (error !is ActivityNotFoundException) {
+                error.printStackTrace()
+            }
+            showToast(getString(R.string.lsrport_download_open_failed))
         }
     }
 

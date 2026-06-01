@@ -25,6 +25,16 @@ object PackageManagerController {
     private const val PREFS_NAME = "package_manager"
     private const val PREF_BASELINE_PACKAGES = "baseline_packages"
 
+    fun isLsrPortModuleInstalled(): Boolean {
+        val result = RootShell.run(LsrPortModule.existsCommand())
+        if (result.exitCode != 0) {
+            throw IllegalStateException(
+                result.output.ifBlank { "Could not check LSRPort module state (exit ${result.exitCode})" },
+            )
+        }
+        return result.output.lineSequence().lastOrNull()?.trim() == "1"
+    }
+
     fun ensureBaselinePackages(context: Context): Set<String> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val storedBaseline = prefs.getStringSet(PREF_BASELINE_PACKAGES, null)

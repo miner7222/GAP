@@ -17,6 +17,11 @@
     <string name="show_not_installed_packages">Show not-installed packages</string>
     <string name="root_required_title">Root Required</string>
     <string name="root_required_message">Grant GAP ROOT access and try again.</string>
+    <string name="lsrport_missing_title">Magisk Module Required</string>
+    <string name="lsrport_missing_message">LSRPort is not installed. Install the Magisk module and reboot before using GAP.</string>
+    <string name="download_button">Download</string>
+    <string name="exit_button">Exit</string>
+    <string name="lsrport_download_open_failed">Could not open the LSRPort releases page.</string>
     <string name="unsupported_os_version">Unsupported OS version.</string>
     <string name="unsupported_soc">Unsupported SOC.</string>
     <string name="retry_button">Retry</string>
