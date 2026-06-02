@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedPackages = LinkedHashSet<String>()
     private var currentQuery = ""
     private var showNotInstalledPackages = false
+    private var showSystemApps = false
     private var shownUpdateTag: String? = null
     private var busy = false
 
@@ -208,6 +209,10 @@ class MainActivity : AppCompatActivity() {
                 return@filter false
             }
 
+            if (!showSystemApps && entry.systemApp) {
+                return@filter false
+            }
+
             if (query.isBlank()) {
                 return@filter true
             }
@@ -229,6 +234,13 @@ class MainActivity : AppCompatActivity() {
 
             R.id.action_show_not_installed -> {
                 showNotInstalledPackages = !showNotInstalledPackages
+                syncMenuState(isBusy = busy)
+                applyFilter()
+                true
+            }
+
+            R.id.action_show_system_apps -> {
+                showSystemApps = !showSystemApps
                 syncMenuState(isBusy = busy)
                 applyFilter()
                 true
@@ -334,6 +346,10 @@ class MainActivity : AppCompatActivity() {
     private fun syncMenuState(isBusy: Boolean) {
         binding.toolbar.menu.findItem(R.id.action_show_not_installed)?.apply {
             isChecked = showNotInstalledPackages
+            isEnabled = !isBusy
+        }
+        binding.toolbar.menu.findItem(R.id.action_show_system_apps)?.apply {
+            isChecked = showSystemApps
             isEnabled = !isBusy
         }
         binding.toolbar.menu.findItem(R.id.action_restore_defaults)?.isEnabled =

@@ -3,19 +3,20 @@
     <string name="app_subtitle" translatable="false">Game Assistant Plus</string>
     <string name="module_description">Provides extra features for Lenovo Game Assistant.</string>
     <string name="package_manager_description">Select the games where Ultra HD Vision should be enabled. Games that are not supported by default may behave unstably.</string>
-    <string name="search_hint">Search packages</string>
+    <string name="search_hint">Search apps</string>
     <string name="save_button">Save</string>
     <string name="refresh_action">Refresh</string>
     <string name="restore_defaults_action">Restore defaults</string>
-    <string name="selection_summary">%1$d packages selected</string>
+    <string name="selection_summary">%1$d apps selected</string>
     <string name="package_name_not_installed">%1$s · not currently installed</string>
     <string name="save_success_custom">Services restarted.</string>
     <string name="save_success_default">Services restarted.</string>
     <string name="save_failed_message">Could not save the whitelist: %1$s</string>
-    <string name="load_failed_message">Could not load packages: %1$s</string>
-    <string name="no_results">No packages match the current search or visibility filter.</string>
+    <string name="load_failed_message">Could not load apps: %1$s</string>
+    <string name="no_results">No apps match the current search or visibility filter.</string>
     <string name="filters_menu">Filters</string>
-    <string name="show_not_installed_packages">Show not-installed packages</string>
+    <string name="show_not_installed_packages">Show not-installed apps</string>
+    <string name="show_system_apps">Show system apps</string>
     <string name="root_required_title">Root Required</string>
     <string name="root_required_message">Grant GAP ROOT access and try again.</string>
     <string name="lsrport_missing_title">Magisk Module Required</string>

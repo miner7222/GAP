@@ -14,6 +14,7 @@ data class PackageEntry(
     val applicationInfo: ApplicationInfo?,
     val installed: Boolean,
     val deviceDefault: Boolean,
+    val systemApp: Boolean,
     var selected: Boolean,
 )
 
@@ -95,6 +96,7 @@ object PackageManagerController {
                     applicationInfo = appInfo,
                     installed = true,
                     deviceDefault = baselinePackages.contains(packageName),
+                    systemApp = appInfo.isSystemApp(),
                     selected = activePackages.contains(packageName),
                 )
             }
@@ -110,6 +112,7 @@ object PackageManagerController {
                 applicationInfo = null,
                 installed = false,
                 deviceDefault = baselinePackages.contains(packageName),
+                systemApp = false,
                 selected = true,
             )
         }
@@ -125,6 +128,7 @@ object PackageManagerController {
                 applicationInfo = null,
                 installed = false,
                 deviceDefault = true,
+                systemApp = false,
                 selected = false,
             )
         }
@@ -339,6 +343,11 @@ object PackageManagerController {
             |
             |am force-stop ${SupportedPackageList.GAME_HELPER_PACKAGE} || true
             """.trimMargin()
+    }
+
+    private fun ApplicationInfo.isSystemApp(): Boolean {
+        return flags and ApplicationInfo.FLAG_SYSTEM != 0 ||
+            flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
     }
 }
 
