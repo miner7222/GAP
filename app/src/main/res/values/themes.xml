@@ -1,14 +1,87 @@
 <resources>
-    <style name="Theme.LSRXposed" parent="Theme.MaterialComponents.Light.NoActionBar">
-        <item name="colorPrimary">@color/lsr_primary</item>
-        <item name="colorPrimaryVariant">@color/lsr_primary_dark</item>
-        <item name="colorSecondary">@color/lsr_secondary</item>
-        <item name="colorSurface">@color/lsr_surface</item>
-        <item name="android:colorBackground">@color/lsr_surface</item>
-        <item name="colorOnSurface">@color/lsr_on_surface</item>
+    <style name="Theme.LSRXposed" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar">
+        <item name="android:colorBackground">?attr/colorSurface</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@color/lsr_surface</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.GAP.MaterialAlertDialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.GAP.MaterialAlertDialog</item>
+        <item name="checkboxStyle">@style/Widget.GAP.CheckBox</item>
+        <item name="linearProgressIndicatorStyle">@style/Widget.GAP.LinearProgressIndicator</item>
+        <item name="materialButtonStyle">@style/Widget.GAP.Button</item>
+        <item name="textInputStyle">@style/Widget.GAP.SearchBar</item>
+        <item name="toolbarStyle">@style/Widget.GAP.Toolbar</item>
+    </style>
+
+    <style name="ThemeOverlay.GAP.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.GAP.CornerExtraLarge</item>
+    </style>
+
+    <style name="ShapeAppearance.GAP.CornerLarge" parent="ShapeAppearance.Material3.Corner.Large" />
+
+    <style name="ShapeAppearance.GAP.CornerExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraLarge" />
+
+    <style name="TextAppearance.GAP.ToolbarTitle" parent="TextAppearance.Material3.TitleLarge.Emphasized" />
+
+    <style name="TextAppearance.GAP.ToolbarSubtitle" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.GAP.Description" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.GAP.Summary" parent="TextAppearance.Material3.TitleMedium.Emphasized" />
+
+    <style name="TextAppearance.GAP.PackageName" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="Widget.GAP.Button" parent="Widget.Material3.Button">
+        <item name="shapeAppearance">@style/ShapeAppearance.GAP.CornerExtraLarge</item>
+    </style>
+
+    <style name="Widget.GAP.CheckBox" parent="Widget.Material3.CompoundButton.CheckBox" />
+
+    <style name="Widget.GAP.LinearProgressIndicator" parent="Widget.Material3.LinearProgressIndicator">
+        <item name="trackCornerRadius">2dp</item>
+    </style>
+
+    <style name="Widget.GAP.PackageCard" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">?attr/colorSurfaceContainerLow</item>
+        <item name="cardElevation">0dp</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.GAP.CornerLarge</item>
+        <item name="strokeColor">?attr/colorOutlineVariant</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Widget.GAP.SearchBar" parent="Widget.Material3.TextInputLayout.FilledBox">
+        <item name="boxBackgroundColor">?attr/colorSurfaceContainerHigh</item>
+        <item name="boxCornerRadiusBottomEnd">28dp</item>
+        <item name="boxCornerRadiusBottomStart">28dp</item>
+        <item name="boxCornerRadiusTopEnd">28dp</item>
+        <item name="boxCornerRadiusTopStart">28dp</item>
+        <item name="boxStrokeWidth">0dp</item>
+        <item name="boxStrokeWidthFocused">0dp</item>
+        <item name="endIconTint">?attr/colorOnSurfaceVariant</item>
+        <item name="hintTextColor">?attr/colorOnSurfaceVariant</item>
+        <item name="startIconTint">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="Widget.GAP.SearchInput" parent="Widget.Material3.TextInputEditText.FilledBox">
+        <item name="android:gravity">center_vertical|start</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:minHeight">56dp</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="android:textColorHint">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="Widget.GAP.Toolbar" parent="Widget.Material3.Toolbar.Surface">
+        <item name="titleTextAppearance">@style/TextAppearance.GAP.ToolbarTitle</item>
+        <item name="subtitleTextAppearance">@style/TextAppearance.GAP.ToolbarSubtitle</item>
     </style>
 </resources>

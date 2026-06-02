@@ -3,13 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
+        style="?attr/toolbarStyle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorSurface"
         android:paddingHorizontal="8dp"
         app:titleCentered="false" />
 
@@ -22,8 +23,7 @@
         android:paddingEnd="20dp"
         android:lineSpacingExtra="2dp"
         android:text="@string/package_manager_description"
-        android:textAppearance="?attr/textAppearanceBodyLarge"
-        android:textSize="16sp" />
+        android:textAppearance="@style/TextAppearance.GAP.Description" />
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/summary"
@@ -32,26 +32,32 @@
         android:paddingStart="20dp"
         android:paddingTop="8dp"
         android:paddingEnd="20dp"
-        android:textAppearance="?attr/textAppearanceTitleMedium"
-        android:textSize="17sp" />
+        android:textAppearance="@style/TextAppearance.GAP.Summary" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchLayout"
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        style="@style/Widget.GAP.SearchBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginTop="12dp"
         android:layout_marginEnd="16dp"
-        android:hint="@string/search_hint"
-        app:startIconDrawable="@android:drawable/ic_menu_search">
+        app:endIconMode="clear_text"
+        app:endIconTint="?attr/colorOnSurfaceVariant"
+        app:hintEnabled="false"
+        app:startIconDrawable="@drawable/ic_search_24"
+        app:startIconTint="?attr/colorOnSurfaceVariant">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/searchInput"
+            style="@style/Widget.GAP.SearchInput"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="56dp"
+            android:hint="@string/search_hint"
             android:imeOptions="actionDone"
-            android:inputType="text" />
+            android:inputType="text"
+            android:singleLine="true"
+            android:textAppearance="?attr/textAppearanceBodyLarge" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.progressindicator.LinearProgressIndicator
@@ -74,6 +80,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
+            android:paddingTop="4dp"
             android:paddingBottom="8dp" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
@@ -86,14 +93,14 @@
         android:paddingEnd="20dp"
         android:paddingBottom="16dp"
         android:text="@string/no_results"
-        android:textAppearance="?attr/textAppearanceBodyLarge"
-        android:textSize="16sp"
+        android:textAppearance="@style/TextAppearance.GAP.Description"
         android:visibility="gone" />
 
     <LinearLayout
         android:id="@+id/buttonBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="?attr/colorSurfaceContainer"
         android:gravity="end"
         android:orientation="horizontal"
         android:paddingStart="16dp"
@@ -103,9 +110,9 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/saveButton"
+            style="@style/Widget.GAP.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="15sp"
             android:text="@string/save_button" />
     </LinearLayout>
 

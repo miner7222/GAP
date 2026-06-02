@@ -2,10 +2,10 @@ package io.github.miner7222.gap.ui
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.core.view.ViewCompat
@@ -15,6 +15,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updatePadding
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.miner7222.gap.BuildConfig
 import io.github.miner7222.gap.DeviceCompatibility
 import io.github.miner7222.gap.DeviceCompatibility.CompatibilityStatus
@@ -51,10 +52,7 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        WindowInsetsControllerCompat(window, binding.root).apply {
-            isAppearanceLightStatusBars = true
-            isAppearanceLightNavigationBars = true
-        }
+        applySystemBarAppearance()
 
         adapter = PackageListAdapter(packageManager) { entry ->
             if (entry.selected) {
@@ -259,13 +257,20 @@ class MainActivity : AppCompatActivity() {
             binding.buttonBar.updatePadding(bottom = buttonBarBottomPadding + systemBars.bottom)
             binding.packageList.updatePadding(bottom = packageListBottomPadding + systemBars.bottom)
             binding.emptyState.updatePadding(bottom = emptyStateBottomPadding + systemBars.bottom)
-            WindowInsetsControllerCompat(window, binding.root).apply {
-                isAppearanceLightStatusBars = true
-                isAppearanceLightNavigationBars = true
-            }
+            applySystemBarAppearance()
             insets
         }
         ViewCompat.requestApplyInsets(binding.root)
+    }
+
+    private fun applySystemBarAppearance() {
+        val isLightTheme = (
+            resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        ) != Configuration.UI_MODE_NIGHT_YES
+        WindowInsetsControllerCompat(window, binding.root).apply {
+            isAppearanceLightStatusBars = isLightTheme
+            isAppearanceLightNavigationBars = isLightTheme
+        }
     }
 
     private fun resetToBaseline() {
@@ -337,7 +342,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showRootAccessDialog() {
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle(R.string.root_required_title)
             .setMessage(R.string.root_required_message)
             .setCancelable(false)
@@ -351,7 +356,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLsrPortMissingDialog() {
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle(R.string.lsrport_missing_title)
             .setMessage(R.string.lsrport_missing_message)
             .setCancelable(false)
@@ -367,7 +372,7 @@ class MainActivity : AppCompatActivity() {
     private fun showUpdateDialog(release: ReleaseInfo) {
         val changelog = release.body.ifBlank { getString(R.string.update_no_changes) }
 
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle(R.string.update_available_title)
             .setMessage(
                 getString(
