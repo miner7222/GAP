@@ -15,6 +15,10 @@
     <string name="filters_menu">필터</string>
     <string name="show_not_installed_packages">설치되지 않은 앱 표시</string>
     <string name="show_system_apps">시스템 앱 표시</string>
+    <string name="about_title">정보</string>
+    <string name="about_version">버전 %1$s</string>
+    <string name="github_link">GitHub 열기</string>
+    <string name="github_open_failed">GitHub를 열지 못했습니다.</string>
     <string name="root_required_title">ROOT 권한 필요</string>
     <string name="root_required_message">GAP에 ROOT 권한을 부여한 뒤 다시 시도하세요.</string>
     <string name="lsrport_missing_title">Magisk 모듈 필요</string>

@@ -34,6 +34,14 @@
 
     <style name="TextAppearance.GAP.Summary" parent="TextAppearance.Material3.TitleMedium.Emphasized" />
 
+    <style name="TextAppearance.GAP.AboutAppName" parent="TextAppearance.Material3.TitleLarge.Emphasized">
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <style name="TextAppearance.GAP.AboutVersion" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
     <style name="TextAppearance.GAP.PackageName" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:fontFamily">monospace</item>
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>

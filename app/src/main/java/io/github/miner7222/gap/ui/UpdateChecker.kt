@@ -14,6 +14,7 @@ object UpdateChecker {
     private const val CONNECT_TIMEOUT_MS = 5000
     private const val READ_TIMEOUT_MS = 5000
     private const val LATEST_RELEASE_API_URL = "https://api.github.com/repos/miner7222/GAP/releases/latest"
+    const val REPOSITORY_URL = "https://github.com/miner7222/GAP"
     const val RELEASES_URL = "https://github.com/miner7222/GAP/releases"
 
     fun fetchLatestRelease(): ReleaseInfo? {

@@ -22,6 +22,7 @@ import io.github.miner7222.gap.DeviceCompatibility.CompatibilityStatus
 import io.github.miner7222.gap.R
 import io.github.miner7222.gap.SupportedPackageList
 import io.github.miner7222.gap.databinding.ActivityMainBinding
+import io.github.miner7222.gap.databinding.DialogAboutBinding
 import java.util.LinkedHashSet
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -251,6 +252,11 @@ class MainActivity : AppCompatActivity() {
                 true
             }
 
+            R.id.action_about -> {
+                showAboutDialog()
+                true
+            }
+
             else -> false
         }
     }
@@ -401,6 +407,19 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showAboutDialog() {
+        val aboutBinding = DialogAboutBinding.inflate(layoutInflater)
+        aboutBinding.aboutVersion.text = getString(R.string.about_version, BuildConfig.VERSION_NAME)
+        aboutBinding.githubButton.setOnClickListener {
+            openGitHubRepository()
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setView(aboutBinding.root)
+            .setPositiveButton(R.string.close_button, null)
+            .show()
+    }
+
     private fun openGitHubReleases() {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.RELEASES_URL))
         runCatching {
@@ -410,6 +429,18 @@ class MainActivity : AppCompatActivity() {
                 error.printStackTrace()
             }
             showToast(getString(R.string.update_open_failed))
+        }
+    }
+
+    private fun openGitHubRepository() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.REPOSITORY_URL))
+        runCatching {
+            startActivity(intent)
+        }.onFailure { error ->
+            if (error !is ActivityNotFoundException) {
+                error.printStackTrace()
+            }
+            showToast(getString(R.string.github_open_failed))
         }
     }
 
