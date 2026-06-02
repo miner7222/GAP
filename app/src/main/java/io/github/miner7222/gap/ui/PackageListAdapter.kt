@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.color.MaterialColors
 import io.github.miner7222.gap.R
 import io.github.miner7222.gap.databinding.ItemPackageEntryBinding
 
@@ -39,6 +40,7 @@ class PackageListAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(entry: PackageEntry) {
+            applyDefaultPackageColors(entry.deviceDefault)
             binding.appName.text = entry.label
             binding.packageName.text = if (entry.installed) {
                 entry.packageName
@@ -61,6 +63,28 @@ class PackageListAdapter(
         private fun resolveIcon(entry: PackageEntry): Drawable? {
             return entry.applicationInfo?.loadIcon(packageManager)
                 ?: ContextCompat.getDrawable(binding.root.context, android.R.drawable.sym_def_app_icon)
+        }
+
+        private fun applyDefaultPackageColors(isDeviceDefault: Boolean) {
+            val backgroundAttr = if (isDeviceDefault) {
+                com.google.android.material.R.attr.colorSecondaryContainer
+            } else {
+                com.google.android.material.R.attr.colorSurfaceContainerLow
+            }
+            val titleColorAttr = if (isDeviceDefault) {
+                com.google.android.material.R.attr.colorOnSecondaryContainer
+            } else {
+                com.google.android.material.R.attr.colorOnSurface
+            }
+            val supportingColorAttr = if (isDeviceDefault) {
+                com.google.android.material.R.attr.colorOnSecondaryContainer
+            } else {
+                com.google.android.material.R.attr.colorOnSurfaceVariant
+            }
+
+            binding.root.setCardBackgroundColor(MaterialColors.getColor(binding.root, backgroundAttr))
+            binding.appName.setTextColor(MaterialColors.getColor(binding.root, titleColorAttr))
+            binding.packageName.setTextColor(MaterialColors.getColor(binding.root, supportingColorAttr))
         }
     }
 }

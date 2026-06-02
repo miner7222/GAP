@@ -5,7 +5,7 @@
     <string name="save_button">저장</string>
     <string name="refresh_action">새로고침</string>
     <string name="restore_defaults_action">기본값으로 복원</string>
-    <string name="selection_summary">%1$d개 선택됨 · 기기 기본값 %2$d개</string>
+    <string name="selection_summary">%1$d개 선택됨</string>
     <string name="package_name_not_installed">%1$s · 현재 설치되지 않음</string>
     <string name="save_success_custom">서비스 재시작됨</string>
     <string name="save_success_default">서비스 재시작됨</string>

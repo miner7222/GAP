@@ -316,8 +316,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateSummary() {
         val selectedCount = selectedPackages.size
-        val baselineCount = baselinePackages.size
-        binding.summary.text = getString(R.string.selection_summary, selectedCount, baselineCount)
+        binding.summary.text = getString(R.string.selection_summary, selectedCount)
         binding.saveButton.isEnabled = !busy
         syncMenuState(isBusy = busy)
     }

@@ -13,6 +13,7 @@ data class PackageEntry(
     val packageName: String,
     val applicationInfo: ApplicationInfo?,
     val installed: Boolean,
+    val deviceDefault: Boolean,
     var selected: Boolean,
 )
 
@@ -93,6 +94,7 @@ object PackageManagerController {
                     packageName = packageName,
                     applicationInfo = appInfo,
                     installed = true,
+                    deviceDefault = baselinePackages.contains(packageName),
                     selected = activePackages.contains(packageName),
                 )
             }
@@ -107,6 +109,7 @@ object PackageManagerController {
                 packageName = packageName,
                 applicationInfo = null,
                 installed = false,
+                deviceDefault = baselinePackages.contains(packageName),
                 selected = true,
             )
         }
@@ -121,6 +124,7 @@ object PackageManagerController {
                 packageName = packageName,
                 applicationInfo = null,
                 installed = false,
+                deviceDefault = true,
                 selected = false,
             )
         }
