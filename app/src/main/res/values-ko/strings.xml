@@ -15,6 +15,10 @@
     <string name="filters_menu">필터</string>
     <string name="show_not_installed_packages">설치되지 않은 앱 표시</string>
     <string name="show_system_apps">시스템 앱 표시</string>
+    <string name="theme_title">테마</string>
+    <string name="theme_system">시스템 설정에 따름 (기본값)</string>
+    <string name="theme_light">라이트</string>
+    <string name="theme_dark">다크</string>
     <string name="about_title">정보</string>
     <string name="about_version">버전 %1$s</string>
     <string name="github_link">GitHub 열기</string>
@@ -29,6 +33,7 @@
     <string name="unsupported_os_version">지원하지 않는 OS 버전입니다.</string>
     <string name="unsupported_soc">지원하지 않는 SOC입니다.</string>
     <string name="retry_button">다시 시도</string>
+    <string name="cancel_button">취소</string>
     <string name="close_button">닫기</string>
     <string name="update_available_title">업데이트 가능</string>
     <string name="update_available_message">현재 버전: %1$s

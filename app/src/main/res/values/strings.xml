@@ -17,6 +17,10 @@
     <string name="filters_menu">Filters</string>
     <string name="show_not_installed_packages">Show not-installed apps</string>
     <string name="show_system_apps">Show system apps</string>
+    <string name="theme_title">Theme</string>
+    <string name="theme_system">Follow system setting (default)</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
     <string name="about_title">About</string>
     <string name="about_version">Version %1$s</string>
     <string name="github_link">Open GitHub</string>
@@ -31,6 +35,7 @@
     <string name="unsupported_os_version">Unsupported OS version.</string>
     <string name="unsupported_soc">Unsupported SOC.</string>
     <string name="retry_button">Retry</string>
+    <string name="cancel_button">Cancel</string>
     <string name="close_button">Close</string>
     <string name="update_available_title">Update available</string>
     <string name="update_available_message">Current version: %1$s

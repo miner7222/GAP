@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.isVisible
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -43,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyThemeMode(readSavedThemeMode())
         super.onCreate(savedInstanceState)
         if (!checkDeviceCompatibility()) {
             return
@@ -252,6 +254,11 @@ class MainActivity : AppCompatActivity() {
                 true
             }
 
+            R.id.action_theme -> {
+                showThemeDialog()
+                true
+            }
+
             R.id.action_about -> {
                 showAboutDialog()
                 true
@@ -407,6 +414,32 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showThemeDialog() {
+        val modes = themeModes()
+        val currentMode = readSavedThemeMode()
+        val selectedIndex = modes.indexOf(currentMode).takeIf { it >= 0 } ?: 0
+        val labels = arrayOf(
+            getString(R.string.theme_system),
+            getString(R.string.theme_light),
+            getString(R.string.theme_dark),
+        )
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.theme_title)
+            .setSingleChoiceItems(labels, selectedIndex, null)
+            .setNegativeButton(R.string.cancel_button, null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.listView.setOnItemClickListener { _, _, position, _ ->
+                saveThemeMode(modes[position])
+                dialog.dismiss()
+                applyThemeMode(modes[position])
+            }
+        }
+        dialog.show()
+    }
+
     private fun showAboutDialog() {
         val aboutBinding = DialogAboutBinding.inflate(layoutInflater)
         aboutBinding.aboutVersion.text = getString(R.string.about_version, BuildConfig.VERSION_NAME)
@@ -458,5 +491,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun readSavedThemeMode(): Int {
+        val mode = getSharedPreferences(UI_PREFS_NAME, MODE_PRIVATE)
+            .getInt(PREF_THEME_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+        return mode.takeIf { it in themeModes() } ?: AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+    }
+
+    private fun saveThemeMode(mode: Int) {
+        getSharedPreferences(UI_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_THEME_MODE, mode)
+            .apply()
+    }
+
+    private fun applyThemeMode(mode: Int) {
+        AppCompatDelegate.setDefaultNightMode(mode)
+    }
+
+    private fun themeModes(): IntArray {
+        return intArrayOf(
+            AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM,
+            AppCompatDelegate.MODE_NIGHT_NO,
+            AppCompatDelegate.MODE_NIGHT_YES,
+        )
+    }
+
+    companion object {
+        private const val UI_PREFS_NAME = "ui_preferences"
+        private const val PREF_THEME_MODE = "theme_mode"
     }
 }
