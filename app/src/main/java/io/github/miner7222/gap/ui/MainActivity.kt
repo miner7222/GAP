@@ -3,6 +3,7 @@ package io.github.miner7222.gap.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Paint
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
@@ -84,7 +85,7 @@ class MainActivity : AppCompatActivity() {
 
         requestRootAndLoadPackages()
         if (savedInstanceState == null) {
-            checkForUpdates()
+            checkForUpdates(manual = false)
         }
     }
 
@@ -134,15 +135,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkForUpdates() {
+    private fun checkForUpdates(manual: Boolean) {
         executor.execute {
-            val release = UpdateChecker.fetchLatestRelease() ?: return@execute
+            val release = UpdateChecker.fetchLatestRelease()
+            if (release == null) {
+                if (manual) {
+                    runOnUiThread {
+                        showToast(getString(R.string.update_check_failed))
+                    }
+                }
+                return@execute
+            }
+
             if (!UpdateChecker.isNewerRelease(release.tagName, BuildConfig.VERSION_NAME)) {
+                if (manual) {
+                    runOnUiThread {
+                        showToast(getString(R.string.update_check_no_update))
+                    }
+                }
                 return@execute
             }
 
             runOnUiThread {
-                if (isFinishing || isDestroyed || shownUpdateTag == release.tagName) {
+                if (isFinishing || isDestroyed) {
+                    return@runOnUiThread
+                }
+                if (!manual && shownUpdateTag == release.tagName) {
                     return@runOnUiThread
                 }
                 shownUpdateTag = release.tagName
@@ -443,14 +461,21 @@ class MainActivity : AppCompatActivity() {
     private fun showAboutDialog() {
         val aboutBinding = DialogAboutBinding.inflate(layoutInflater)
         aboutBinding.aboutVersion.text = getString(R.string.about_version, BuildConfig.VERSION_NAME)
+        aboutBinding.aboutUpdateCheck.paintFlags =
+            aboutBinding.aboutUpdateCheck.paintFlags or Paint.UNDERLINE_TEXT_FLAG
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setView(aboutBinding.root)
+            .setPositiveButton(R.string.close_button, null)
+            .create()
+        aboutBinding.aboutUpdateCheck.setOnClickListener {
+            dialog.dismiss()
+            checkForUpdates(manual = true)
+        }
         aboutBinding.githubButton.setOnClickListener {
             openGitHubRepository()
         }
-
-        MaterialAlertDialogBuilder(this)
-            .setView(aboutBinding.root)
-            .setPositiveButton(R.string.close_button, null)
-            .show()
+        dialog.show()
     }
 
     private fun openGitHubReleases() {

@@ -34,11 +34,26 @@
         android:gravity="center"
         android:textAppearance="@style/TextAppearance.GAP.AboutVersion" />
 
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/aboutUpdateCheck"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless"
+        android:gravity="center"
+        android:minHeight="48dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="@string/update_check_action"
+        android:textAppearance="@style/TextAppearance.GAP.AboutLink" />
+
     <ImageButton
         android:id="@+id/githubButton"
         android:layout_width="56dp"
         android:layout_height="56dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="12dp"
         android:background="@drawable/bg_about_github_button"
         android:contentDescription="@string/github_link"
         android:minWidth="48dp"

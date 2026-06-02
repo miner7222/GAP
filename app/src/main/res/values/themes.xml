@@ -42,6 +42,10 @@
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
     </style>
 
+    <style name="TextAppearance.GAP.AboutLink" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:textColor">?attr/colorPrimary</item>
+    </style>
+
     <style name="TextAppearance.GAP.PackageName" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:fontFamily">monospace</item>
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
