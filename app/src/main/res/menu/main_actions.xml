@@ -3,6 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_refresh_packages"
+        android:icon="@drawable/ic_refresh_24"
+        android:title="@string/refresh_action"
+        app:showAsAction="ifRoom" />
+
+    <item
         android:id="@+id/action_show_not_installed"
         android:checkable="true"
         android:title="@string/show_not_installed_packages"

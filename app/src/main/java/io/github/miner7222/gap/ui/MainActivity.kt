@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private var currentQuery = ""
     private var showNotInstalledPackages = false
     private var shownUpdateTag: String? = null
+    private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +69,7 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.subtitle = getString(R.string.app_subtitle)
         binding.toolbar.inflateMenu(R.menu.main_actions)
         binding.toolbar.setOnMenuItemClickListener { handleToolbarMenuItem(it.itemId) }
+        binding.packageRefresh.setOnRefreshListener { refreshPackages() }
         binding.packageList.layoutManager = LinearLayoutManager(this)
         binding.packageList.adapter = adapter
         binding.searchInput.doAfterTextChanged {
@@ -147,8 +149,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadPackages() {
-        setBusy(true)
+    private fun refreshPackages() {
+        if (busy) {
+            binding.packageRefresh.isRefreshing = false
+            return
+        }
+        loadPackages(showRefreshSpinner = true, preserveSelection = true)
+    }
+
+    private fun loadPackages(showRefreshSpinner: Boolean = false, preserveSelection: Boolean = false) {
+        val retainedSelection = if (preserveSelection) LinkedHashSet(selectedPackages) else null
+        setBusy(true, showRefreshSpinner)
         executor.execute {
             runCatching {
                 PackageManagerController.loadEntries(this)
@@ -156,13 +167,23 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     baselinePackages = baseline
                     entries = loadedEntries
-                    selectedPackages = LinkedHashSet(
-                        loadedEntries
-                            .asSequence()
-                            .filter { it.selected }
-                            .map { it.packageName }
-                            .toList(),
-                    )
+                    if (retainedSelection != null) {
+                        val loadedPackageNames = loadedEntries.mapTo(LinkedHashSet()) { it.packageName }
+                        selectedPackages = LinkedHashSet(
+                            retainedSelection.filter { packageName -> loadedPackageNames.contains(packageName) },
+                        )
+                        entries.forEach { entry ->
+                            entry.selected = selectedPackages.contains(entry.packageName)
+                        }
+                    } else {
+                        selectedPackages = LinkedHashSet(
+                            loadedEntries
+                                .asSequence()
+                                .filter { it.selected }
+                                .map { it.packageName }
+                                .toList(),
+                        )
+                    }
                     applyFilter()
                     setBusy(false)
                 }
@@ -203,9 +224,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleToolbarMenuItem(itemId: Int): Boolean {
         return when (itemId) {
+            R.id.action_refresh_packages -> {
+                refreshPackages()
+                true
+            }
+
             R.id.action_show_not_installed -> {
                 showNotInstalledPackages = !showNotInstalledPackages
-                syncMenuState(isBusy = binding.progressIndicator.isVisible)
+                syncMenuState(isBusy = busy)
                 applyFilter()
                 true
             }
@@ -287,12 +313,15 @@ class MainActivity : AppCompatActivity() {
         val selectedCount = selectedPackages.size
         val baselineCount = baselinePackages.size
         binding.summary.text = getString(R.string.selection_summary, selectedCount, baselineCount)
-        binding.saveButton.isEnabled = !binding.progressIndicator.isVisible
-        syncMenuState(isBusy = binding.progressIndicator.isVisible)
+        binding.saveButton.isEnabled = !busy
+        syncMenuState(isBusy = busy)
     }
 
-    private fun setBusy(isBusy: Boolean) {
-        binding.progressIndicator.isVisible = isBusy
+    private fun setBusy(isBusy: Boolean, showRefreshSpinner: Boolean = false) {
+        busy = isBusy
+        binding.progressIndicator.isVisible = isBusy && !showRefreshSpinner
+        binding.packageRefresh.isRefreshing = isBusy && showRefreshSpinner
+        binding.packageRefresh.isEnabled = !isBusy || showRefreshSpinner
         binding.saveButton.isEnabled = !isBusy
         binding.searchLayout.isEnabled = !isBusy
         syncMenuState(isBusy = isBusy)
