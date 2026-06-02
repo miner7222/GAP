@@ -30,11 +30,7 @@
     <string name="update_available_title">Update available</string>
     <string name="update_available_message">Current version: %1$s
 
-Latest version: %2$s
-
-Changes:
-%3$s</string>
-    <string name="update_no_changes">No changelog was provided for this release.</string>
+Latest version: %2$s</string>
     <string name="update_open_github">Open GitHub</string>
     <string name="update_no_button">No</string>
     <string name="update_open_failed">Could not open the GitHub releases page.</string>

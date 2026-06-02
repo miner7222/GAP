@@ -370,8 +370,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showUpdateDialog(release: ReleaseInfo) {
-        val changelog = release.body.ifBlank { getString(R.string.update_no_changes) }
-
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.update_available_title)
             .setMessage(
@@ -379,7 +377,6 @@ class MainActivity : AppCompatActivity() {
                     R.string.update_available_message,
                     BuildConfig.VERSION_NAME,
                     release.tagName,
-                    changelog,
                 ),
             )
             .setPositiveButton(R.string.update_open_github) { _, _ ->
