@@ -31,6 +31,26 @@ class PackageManagerControllerRootScriptTest {
         assertTrue(script.contains("runcon u:r:vendor_gppservice:s0 /system/bin/gppservice"))
     }
 
+    @Test
+    fun saveScriptForceKillsGameHelperAfterSavingRuntimeList() {
+        val script = buildRootScript(useOverlay = true)
+
+        assertTrue(script.contains("am force-stop ${SupportedPackageList.GAME_HELPER_PACKAGE}"))
+        assertTrue(script.contains("kill_process_by_name ${SupportedPackageList.GAME_HELPER_PACKAGE}"))
+        assertTrue(script.contains("kill -9 ${'$'}PIDS 2>/dev/null || true"))
+    }
+
+    @Test
+    fun saveScriptForceKillsGppServiceBeforeRestartingIt() {
+        val script = buildRootScript(useOverlay = true)
+
+        assertTrue(script.contains("kill_process_by_name gppservice"))
+        assertTrue(
+            script.indexOf("kill_process_by_name gppservice") <
+                script.indexOf("setprop vendor.gpp.create_frc_extension 1"),
+        )
+    }
+
     private fun buildRootScript(useOverlay: Boolean): String {
         val method = PackageManagerController::class.java.getDeclaredMethod(
             "buildRootScript",

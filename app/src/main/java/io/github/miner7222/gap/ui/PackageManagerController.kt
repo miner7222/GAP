@@ -305,23 +305,32 @@ object PackageManagerController {
             |  unbind_active_list
             |fi
             |
+            |kill_process_by_name() {
+            |  PROCESS_NAME="${'$'}1"
+            |  PIDS="$(pidof "${'$'}PROCESS_NAME" 2>/dev/null || true)"
+            |  if [ -n "${'$'}PIDS" ]; then
+            |    kill ${'$'}PIDS 2>/dev/null || true
+            |    sleep 1
+            |  fi
+            |
+            |  PIDS="$(pidof "${'$'}PROCESS_NAME" 2>/dev/null || true)"
+            |  if [ -n "${'$'}PIDS" ]; then
+            |    kill -9 ${'$'}PIDS 2>/dev/null || true
+            |    sleep 1
+            |  fi
+            |}
+            |
             |restart_native_gppservice() {
             |  stop vendor.gppservice 2>/dev/null || setprop ctl.stop vendor.gppservice 2>/dev/null || true
             |  sleep 1
-            |  if pidof gppservice >/dev/null 2>&1; then
-            |    kill $(pidof gppservice) || true
-            |    sleep 1
-            |  fi
+            |  kill_process_by_name gppservice
             |  setprop vendor.gpp.create_frc_extension 1
             |  start vendor.gppservice 2>/dev/null || setprop ctl.start vendor.gppservice 2>/dev/null || true
             |  sleep 1
             |}
             |
             |restart_compat_gppservice() {
-            |  if pidof gppservice >/dev/null 2>&1; then
-            |    kill $(pidof gppservice) || true
-            |    sleep 1
-            |  fi
+            |  kill_process_by_name gppservice
             |  start vendor.vppservice 2>/dev/null || true
             |  chcon u:object_r:vendor_gppservice_exec:s0 /system/bin/gppservice 2>/dev/null || true
             |  setprop vendor.gpp.create_frc_extension 1
@@ -341,7 +350,9 @@ object PackageManagerController {
             |  restart_compat_gppservice
             |fi
             |
-            |am force-stop ${SupportedPackageList.GAME_HELPER_PACKAGE} || true
+            |am force-stop ${SupportedPackageList.GAME_HELPER_PACKAGE} >/dev/null 2>&1 || true
+            |cmd activity force-stop ${SupportedPackageList.GAME_HELPER_PACKAGE} >/dev/null 2>&1 || true
+            |kill_process_by_name ${SupportedPackageList.GAME_HELPER_PACKAGE}
             """.trimMargin()
     }
 
