@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
 
     private var baselinePackages: Set<String> = emptySet()
     private var entries: List<PackageEntry> = emptyList()
+    private var visibleEntries: List<PackageEntry> = emptyList()
     private var selectedPackages = LinkedHashSet<String>()
     private var currentQuery = ""
     private var showNotInstalledPackages = false
@@ -241,6 +242,7 @@ class MainActivity : AppCompatActivity() {
             entry.label.lowercase().contains(query) || entry.packageName.lowercase().contains(query)
         }
 
+        visibleEntries = filtered
         adapter.submitList(filtered)
         binding.emptyState.isVisible = filtered.isEmpty()
         updateSummary()
@@ -358,7 +360,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSummary() {
-        val selectedCount = selectedPackages.size
+        val selectedCount = visibleEntries.count { it.selected }
         binding.summary.text = getString(R.string.selection_summary, selectedCount)
         binding.saveButton.isEnabled = !busy
         syncMenuState(isBusy = busy)
