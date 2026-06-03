@@ -4,15 +4,11 @@ kotlin = "2.3.21"
 annotation = "1.10.0"
 
 libxposedApi = "101.0.1"
-kavaref-core = "1.0.3"
-kavaref-extension = "1.0.3"
 
 [libraries]
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
 
 libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposedApi" }
-kavaref-core = { module = "com.highcapable.kavaref:kavaref-core", version.ref = "kavaref-core" }
-kavaref-extension = { module = "com.highcapable.kavaref:kavaref-extension", version.ref = "kavaref-extension" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
