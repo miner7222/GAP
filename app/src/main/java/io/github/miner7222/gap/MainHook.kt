@@ -395,7 +395,9 @@ class MainHook : XposedModule() {
                     }
 
                     val originalEntries = runCatching {
-                        callOriginal() as? Array<String>
+                        (callOriginal() as? Array<*>)
+                            ?.mapNotNull { it as? String }
+                            ?.toTypedArray()
                     }.getOrElse {
                         AndroidInternals.log("Failed to read stock $GAME_RESOLUTION_APPS_ARRAY entries", it)
                         null
@@ -1001,7 +1003,7 @@ class MainHook : XposedModule() {
 
     private fun normalizeFloatingBarItems(controller: Any?, source: String) {
         val packageName = resolveControllerPackageName(controller).orEmpty()
-        val currentItems = resolveFloatingFeatureItems(controller) ?: return
+        val currentItems = resolveFloatingFeatureItems(controller)
         if (currentItems.isEmpty()) return   // List not populated yet — let the original code fill it first
         val normalized = ArrayList<Any>(currentItems.size)
 
