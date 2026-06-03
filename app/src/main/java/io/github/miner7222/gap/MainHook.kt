@@ -98,7 +98,7 @@ class MainHook : XposedModule() {
                         name = "startBootstrapServices"
                         paramCount = 1
                     }
-                    afterHook {
+                    after {
                         ensureLsrRegistered()
                     }
                 }
@@ -107,7 +107,7 @@ class MainHook : XposedModule() {
                         name = "startCoreServices"
                         paramCount = 1
                     }
-                    afterHook {
+                    after {
                         ensureLsrRegistered()
                     }
                 }
@@ -116,7 +116,7 @@ class MainHook : XposedModule() {
                         name = "startOtherServices"
                         paramCount = 1
                     }
-                    afterHook {
+                    after {
                         ensureLsrRegistered()
                     }
                 }
@@ -151,7 +151,7 @@ class MainHook : XposedModule() {
                         name = "isBaldur"
                         emptyParam()
                     }
-                    replaceToTrue()
+                    replaceWithTrue()
                 }
             }
         }
@@ -184,7 +184,7 @@ class MainHook : XposedModule() {
                     name = "isFeatureOpen"
                     param(String::class.java)
                 }
-                replaceAny {
+                replace {
                     when (args.firstOrNull() as? String) {
                         SUPER_RESOLUTION_FEATURE_KEY -> true
                         FOUR_D_VIBRATE_FEATURE_KEY -> true
@@ -198,7 +198,7 @@ class MainHook : XposedModule() {
                     name = "getKeyList"
                     emptyParam()
                 }
-                afterHook {
+                after {
                     patchRomFeatureKeyList(instanceOrNull)
                     result = runCatching {
                         @Suppress("UNCHECKED_CAST")
@@ -214,7 +214,7 @@ class MainHook : XposedModule() {
                     name = "isFeatureOpened"
                     paramCount = 1
                 }
-                replaceAny {
+                replace {
                     when (resolveKeyContainerFeatureKey(instanceOrNull)) {
                         SUPER_RESOLUTION_FEATURE_KEY -> true
                         FOUR_D_VIBRATE_FEATURE_KEY -> true
@@ -231,8 +231,8 @@ class MainHook : XposedModule() {
                     name = "createByKeys"
                     param(Array<String>::class.java)
                 }
-                beforeHook {
-                    val keys = (args.firstOrNull() as? Array<*>)?.mapNotNull { it as? String } ?: return@beforeHook
+                before {
+                    val keys = (args.firstOrNull() as? Array<*>)?.mapNotNull { it as? String } ?: return@before
                     val normalized = normalizeFeatureKeys(keys)
                     if (keys.size != normalized.size || keys.toList() != normalized.toList()) {
                         AndroidInternals.log("Normalized FeatureKey list from ${keys.size} to ${normalized.size}")
@@ -252,7 +252,7 @@ class MainHook : XposedModule() {
                     name = "list"
                     emptyParam()
                 }
-                replaceAny {
+                replace {
                     val original = runCatching {
                         @Suppress("UNCHECKED_CAST")
                         callOriginal() as? List<Any?>
@@ -276,7 +276,7 @@ class MainHook : XposedModule() {
                     name = "onCreatePreferences"
                     paramCount = 2
                 }
-                afterHook {
+                after {
                     removeColorfulLightPreference(instanceOrNull)
                 }
             }
@@ -285,7 +285,7 @@ class MainHook : XposedModule() {
                     name = "onResume"
                     emptyParam()
                 }
-                afterHook {
+                after {
                     removeColorfulLightPreference(instanceOrNull)
                 }
             }
@@ -298,7 +298,7 @@ class MainHook : XposedModule() {
                     name = "getFeatureList"
                     emptyParam()
                 }
-                replaceAny {
+                replace {
                     val original = runCatching {
                         @Suppress("UNCHECKED_CAST")
                         callOriginal() as? List<Any?>
@@ -314,7 +314,7 @@ class MainHook : XposedModule() {
                     name = "isEnable"
                     param(Context::class.java)
                 }
-                replaceToTrue()
+                replaceWithTrue()
             }
         }
 
@@ -324,7 +324,7 @@ class MainHook : XposedModule() {
                     name = "isEnable"
                     param(Context::class.java)
                 }
-                replaceAny {
+                replace {
                     isBaldurBoard()
                 }
             }
@@ -333,7 +333,7 @@ class MainHook : XposedModule() {
                     name = "onPreferenceTreeClick"
                     paramCount = 3
                 }
-                replaceAny {
+                replace {
                     if (isBaldurBoard()) callOriginal() else false
                 }
             }
@@ -347,7 +347,7 @@ class MainHook : XposedModule() {
                     name = "getSupportSuperResolution"
                     emptyParam()
                 }
-                replaceToTrue()
+                replaceWithTrue()
             }
         }
 
@@ -361,7 +361,7 @@ class MainHook : XposedModule() {
                     name = "emit"
                     paramCount = 2
                 }
-                afterHook {
+                after {
                     val controller = runCatching {
                         ReflectCompat.getObjectField(instanceOrNull, "this\$0")
                     }.getOrNull()
@@ -384,14 +384,14 @@ class MainHook : XposedModule() {
                     name = "getStringArray"
                     param(Int::class.javaPrimitiveType!!)
                 }
-                replaceAny {
-                    val resources = instanceOrNull as? Resources ?: return@replaceAny callOriginal()
-                    val resId = args.firstOrNull() as? Int ?: return@replaceAny callOriginal()
+                replace {
+                    val resources = instanceOrNull as? Resources ?: return@replace callOriginal()
+                    val resId = args.firstOrNull() as? Int ?: return@replace callOriginal()
                     val entryName = runCatching { resources.getResourceEntryName(resId) }.getOrNull()
                     val packageName = runCatching { resources.getResourcePackageName(resId) }.getOrNull()
 
                     if (entryName != GAME_RESOLUTION_APPS_ARRAY || packageName != GAME_HELPER_PACKAGE) {
-                        return@replaceAny callOriginal()
+                        return@replace callOriginal()
                     }
 
                     val originalEntries = runCatching {
@@ -401,7 +401,7 @@ class MainHook : XposedModule() {
                     }.getOrElse {
                         AndroidInternals.log("Failed to read stock $GAME_RESOLUTION_APPS_ARRAY entries", it)
                         null
-                    } ?: return@replaceAny emptyArray<String>()
+                    } ?: return@replace emptyArray<String>()
 
                     val overriddenEntries = resolveSuperResolutionArrayEntries(originalEntries)
                     if (overriddenEntries != null) {
@@ -456,7 +456,7 @@ class MainHook : XposedModule() {
                     name = methodName
                     paramCount = 2
                 }
-                afterHook {
+                after {
                     mergeWideVisionKnownGames(instanceOrNull)
                 }
             }
@@ -477,7 +477,7 @@ class MainHook : XposedModule() {
                     name = methodName
                     paramCount = 2
                 }
-                replaceAny {
+                replace {
                     val context = args.firstOrNull() as? Context
                     val packageName = args.getOrNull(1) as? String
                     val original = runCatching {
@@ -489,7 +489,7 @@ class MainHook : XposedModule() {
                     }
 
                     if (context == null) {
-                        return@replaceAny original.mapNotNull { it as? String }
+                        return@replace original.mapNotNull { it as? String }
                     }
 
                     mergeVibrationSupportKeys(context, packageName, original)
@@ -512,10 +512,10 @@ class MainHook : XposedModule() {
                     name = methodName
                     paramCount = 2
                 }
-                afterHook {
-                    val context = args.firstOrNull() as? Context ?: return@afterHook
-                    val packageName = args.getOrNull(1) as? String ?: return@afterHook
-                    if (!isAiSoundSupportedPackage(packageName)) return@afterHook
+                after {
+                    val context = args.firstOrNull() as? Context ?: return@after
+                    val packageName = args.getOrNull(1) as? String ?: return@after
+                    if (!isAiSoundSupportedPackage(packageName)) return@after
 
                     val enabled = readAiSoundSetting(context, defaultValue = 1) == 1
                     applyAiSoundState(instanceOrNull, context, enabled)
@@ -538,17 +538,17 @@ class MainHook : XposedModule() {
                     name = "onNoClick"
                     emptyParam()
                 }
-                replaceAny {
+                replace {
                     val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
-                        ?: return@replaceAny callOriginal()
+                        ?: return@replace callOriginal()
                     if (!isAiSoundSupportedPackage(packageName)) {
-                        return@replaceAny callOriginal()
+                        return@replace callOriginal()
                     }
 
                     val context = resolveAiSoundCallbackContext(instanceOrNull)
-                        ?: return@replaceAny callOriginal()
+                        ?: return@replace callOriginal()
                     val item = resolveAiSoundCallbackItem(instanceOrNull)
-                        ?: return@replaceAny callOriginal()
+                        ?: return@replace callOriginal()
                     toggleAiSound(item, context)
                     null
                 }
@@ -559,10 +559,10 @@ class MainHook : XposedModule() {
                     name = "onToast"
                     emptyParam()
                 }
-                replaceAny {
+                replace {
                     val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
                     if (packageName != null && isAiSoundSupportedPackage(packageName)) {
-                        return@replaceAny null
+                        return@replace null
                     }
                     callOriginal()
                 }
@@ -584,15 +584,15 @@ class MainHook : XposedModule() {
                     name = methodName
                     paramCount = 1
                 }
-                replaceAny {
-                    val packageName = args.firstOrNull() as? String ?: return@replaceAny callOriginal()
+                replace {
+                    val packageName = args.firstOrNull() as? String ?: return@replace callOriginal()
                     if (!isAiSoundSupportedPackage(packageName)) {
-                        return@replaceAny callOriginal()
+                        return@replace callOriginal()
                     }
 
                     val context = runCatching {
                         ReflectCompat.getObjectField(instanceOrNull, "mContext") as? Context
-                    }.getOrNull() ?: return@replaceAny callOriginal()
+                    }.getOrNull() ?: return@replace callOriginal()
 
                     readAiSoundSetting(context, defaultValue = 1) == 1 && isAiSoundFeatureOpened()
                 }
@@ -607,7 +607,7 @@ class MainHook : XposedModule() {
                     name = methodName
                     emptyParam()
                 }
-                replaceAny {
+                replace {
                     resolveRegisteredGamePackagesOrOriginal("$className#$methodName")
                 }
             }
@@ -1384,7 +1384,7 @@ class MainHook : XposedModule() {
                     name = "getService"
                     param(String::class.java)
                 }
-                afterHook {
+                after {
                     val svcName = args.firstOrNull()
                     if (svcName == LsrService.LSR_SERVICE) {
                         if (result == null) {
@@ -1402,7 +1402,7 @@ class MainHook : XposedModule() {
                     name = "checkService"
                     param(String::class.java)
                 }
-                afterHook {
+                after {
                     val svcName = args.firstOrNull()
                     if (svcName == LsrService.LSR_SERVICE) {
                         if (result == null) {

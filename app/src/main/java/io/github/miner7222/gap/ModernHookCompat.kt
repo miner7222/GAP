@@ -44,7 +44,7 @@ internal class MemberHookBuilder(
         methodSpec = MethodSpec().apply(block)
     }
 
-    fun beforeHook(block: HookCall.() -> Unit) {
+    fun before(block: HookCall.() -> Unit) {
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
@@ -55,7 +55,7 @@ internal class MemberHookBuilder(
             }
     }
 
-    fun afterHook(block: HookCall.() -> Unit) {
+    fun after(block: HookCall.() -> Unit) {
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
@@ -66,7 +66,7 @@ internal class MemberHookBuilder(
             }
     }
 
-    fun replaceAny(block: HookCall.() -> Any?) {
+    fun replace(block: HookCall.() -> Any?) {
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
@@ -75,8 +75,8 @@ internal class MemberHookBuilder(
             }
     }
 
-    fun replaceToTrue() {
-        replaceAny { true }
+    fun replaceWithTrue() {
+        replace { true }
     }
 
     private fun resolveExecutable(): Executable {
