@@ -5,24 +5,21 @@ import android.content.res.Resources
 import android.media.AudioManager
 import android.os.IBinder
 import android.provider.Settings
-import com.highcapable.yukihookapi.annotation.xposed.InjectYukiHookWithXposed
-import com.highcapable.yukihookapi.hook.factory.configs
-import com.highcapable.yukihookapi.hook.factory.encase
-import com.highcapable.yukihookapi.hook.factory.method
-import com.highcapable.yukihookapi.hook.param.HookParam
-import com.highcapable.yukihookapi.hook.param.PackageParam
-import com.highcapable.yukihookapi.hook.xposed.proxy.IYukiHookXposedInit
+import android.util.Log
+import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
+import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
+import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 import com.zui.server.lsr.LsrService
-import de.robv.android.xposed.XposedHelpers
 import java.io.File
 import java.lang.reflect.Modifier
 import java.util.LinkedHashSet
 import java.util.concurrent.atomic.AtomicBoolean
 
-@InjectYukiHookWithXposed
-class MainHook : IYukiHookXposedInit {
+class MainHook : XposedModule() {
 
     private companion object {
+        private const val TAG = "GAP"
         private const val GAME_HELPER_PACKAGE = "com.zui.game.service"
         private const val SUPER_RESOLUTION_FEATURE_KEY = "key_super_resolution"
         private const val FOUR_D_VIBRATE_FEATURE_KEY = "key_4d_vibrate"
@@ -60,19 +57,28 @@ class MainHook : IYukiHookXposedInit {
     @Volatile
     private var cachedSupportedPackagesSignature: String? = null
 
-    override fun onInit() = configs {
-        // Keep YukiHook's internal debug logger disabled to reduce early-boot
-        // PackageManager churn while system_server hooks are coming online.
-        isDebug = false
+    override fun onModuleLoaded(param: ModuleLoadedParam) {
+        AndroidInternals.log(
+            "Loaded GAP module in ${param.processName}, framework=$frameworkName($frameworkVersionCode), api=$apiVersion",
+        )
     }
 
-    override fun onHook() = encase {
-        loadSystem {
-            applySystemHooks()
+    override fun onSystemServerStarting(param: SystemServerStartingParam) {
+        runCatching {
+            HookScope(this, param.classLoader).applySystemHooks()
+        }.onFailure {
+            log(Log.ERROR, TAG, "Failed to install system_server hooks", it)
         }
+    }
 
-        loadApp(GAME_HELPER_PACKAGE) {
-            applyGameHelperHooks()
+    override fun onPackageReady(param: PackageReadyParam) {
+        if (param.packageName != GAME_HELPER_PACKAGE || !param.isFirstPackage) {
+            return
+        }
+        runCatching {
+            HookScope(this, param.classLoader).applyGameHelperHooks()
+        }.onFailure {
+            log(Log.ERROR, TAG, "Failed to install Game Helper hooks", it)
         }
     }
 
@@ -119,7 +125,7 @@ class MainHook : IYukiHookXposedInit {
             AndroidInternals.log("Skipping compatibility lenovosr bootstrap hooks")
         }
 
-        AndroidInternals.log("Installed YukiHook system_server hooks")
+        AndroidInternals.log("Installed modern Xposed system_server hooks")
     }
 
     private fun PackageParam.applyGameHelperHooks() {
@@ -168,7 +174,7 @@ class MainHook : IYukiHookXposedInit {
         installWideVisionHooks()
         installVibrationSupportHooks()
 
-        AndroidInternals.log("Installed YukiHook game helper hooks")
+        AndroidInternals.log("Installed modern Xposed game helper hooks")
     }
 
     private fun PackageParam.installRomFeatureHooks() {
@@ -1360,7 +1366,7 @@ class MainHook : IYukiHookXposedInit {
             rememberSystemContext(context)
             LsrServiceRegistry.ensureRegistered(context)
         }.onFailure {
-            AndroidInternals.log("Failed to register lenovosr from Yuki hook", it)
+            AndroidInternals.log("Failed to register lenovosr from modern Xposed hook", it)
         }
     }
 

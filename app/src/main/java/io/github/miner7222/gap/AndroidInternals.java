@@ -110,7 +110,6 @@ public final class AndroidInternals {
             return;
         }
         Log.i(TAG, message);
-        de.robv.android.xposed.XposedBridge.log(TAG + ": " + message);
     }
 
     public static void log(String message, Throwable throwable) {
@@ -118,7 +117,5 @@ public final class AndroidInternals {
             return;
         }
         Log.e(TAG, message, throwable);
-        de.robv.android.xposed.XposedBridge.log(TAG + ": " + message);
-        de.robv.android.xposed.XposedBridge.log(throwable);
     }
 }
