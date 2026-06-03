@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "io.github.miner7222.gap"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.github.miner7222.gap"
-        minSdk = 24
-        targetSdk = 36
+        minSdk = 26
+        targetSdk = 37
         versionCode = 1040
         versionName = "v1.0.4"
     }
