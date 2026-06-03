@@ -82,7 +82,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.applySystemHooks() {
+    private fun HookScope.applySystemHooks() {
         if (!systemHooksInstalled.compareAndSet(false, true)) return
 
         if (AndroidInternals.useCompatibilityLsr()) {
@@ -128,7 +128,7 @@ class MainHook : XposedModule() {
         AndroidInternals.log("Installed modern Xposed system_server hooks")
     }
 
-    private fun PackageParam.applyGameHelperHooks() {
+    private fun HookScope.applyGameHelperHooks() {
         if (!gameHooksInstalled.compareAndSet(false, true)) return
 
         // Cache the Game Helper classloader for helpers that run after the
@@ -177,7 +177,7 @@ class MainHook : XposedModule() {
         AndroidInternals.log("Installed modern Xposed game helper hooks")
     }
 
-    private fun PackageParam.installRomFeatureHooks() {
+    private fun HookScope.installRomFeatureHooks() {
         findClass("com.zui.game.service.RomFeatures").hook {
             injectMember {
                 method {
@@ -202,7 +202,7 @@ class MainHook : XposedModule() {
                     patchRomFeatureKeyList(instanceOrNull)
                     result = runCatching {
                         @Suppress("UNCHECKED_CAST")
-                        XposedHelpers.getObjectField(instanceOrNull, "keyList") as? List<Any?>
+                        ReflectCompat.getObjectField(instanceOrNull, "keyList") as? List<Any?>
                     }.getOrNull() ?: result
                 }
             }
@@ -245,7 +245,7 @@ class MainHook : XposedModule() {
         patchExistingRomFeatureSets()
     }
 
-    private fun PackageParam.installGameSettingFeatureHooks() {
+    private fun HookScope.installGameSettingFeatureHooks() {
         findClass("com.zui.ugame.gamesetting.feature.FeatureList").hook {
             injectMember {
                 method {
@@ -340,7 +340,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.installSuperResolutionAvailabilityHooks() {
+    private fun HookScope.installSuperResolutionAvailabilityHooks() {
         findClass("com.zui.game.service.di.Settings").hook {
             injectMember {
                 method {
@@ -363,7 +363,7 @@ class MainHook : XposedModule() {
                 }
                 afterHook {
                     val controller = runCatching {
-                        XposedHelpers.getObjectField(instanceOrNull, "this\$0")
+                        ReflectCompat.getObjectField(instanceOrNull, "this\$0")
                     }.getOrNull()
                     normalizeFloatingBarItems(controller, "getCurrentView collector")
                     // If the LiveData was empty (list not populated yet), schedule a
@@ -377,7 +377,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.installSuperResolutionResourceHooks() {
+    private fun HookScope.installSuperResolutionResourceHooks() {
         findClass("android.content.res.Resources").hook {
             injectMember {
                 method {
@@ -415,7 +415,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.installSuperResolutionSupportHooks() {
+    private fun HookScope.installSuperResolutionSupportHooks() {
         hookSuperResolutionSupportMethod(
             "com.zui.ugame.gamesetting.data.RepositoryImpl",
             "querySuperResolutionSupportPackage",
@@ -434,13 +434,13 @@ class MainHook : XposedModule() {
         )
     }
 
-    private fun PackageParam.installAiSoundEnhancementHooks() {
+    private fun HookScope.installAiSoundEnhancementHooks() {
         hookAiSoundItemInitialization()
         hookAiSoundToggleHandler()
         hookAiSoundFloatingNotice()
     }
 
-    private fun PackageParam.installWideVisionHooks() {
+    private fun HookScope.installWideVisionHooks() {
         val className = "com.zui.ugame.gamesetting.ui.options.content.widevision.MoreGameViewModel"
         val methodName = "<init>"
         if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
@@ -461,7 +461,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.installVibrationSupportHooks() {
+    private fun HookScope.installVibrationSupportHooks() {
         val className = "com.zui.game.service.vibrate.VibrationToolKt"
         val methodName = "isGameSupport4dVibration"
         if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
@@ -496,7 +496,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.hookAiSoundItemInitialization() {
+    private fun HookScope.hookAiSoundItemInitialization() {
         val className = "com.zui.game.service.sys.item.ItemAISoundEnhancement"
         val methodName = "initFromSavedState"
         if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
@@ -523,7 +523,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.hookAiSoundToggleHandler() {
+    private fun HookScope.hookAiSoundToggleHandler() {
         val className = "com.zui.game.service.sys.item.ItemAISoundEnhancement\$initFromSavedState\$1"
         if (!hasMethodWithParamCount(className, "onNoClick", 0, appClassLoader)) {
             AndroidInternals.log("Skip missing $className#onNoClick/0 in Game Helper")
@@ -568,7 +568,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.hookAiSoundFloatingNotice() {
+    private fun HookScope.hookAiSoundFloatingNotice() {
         val className = "com.zui.game.service.ui.FloatingGameNoticController"
         val methodName = "checkAISoundEnhancementEnable"
         if (!hasMethodWithParamCount(className, methodName, 1, appClassLoader)) {
@@ -589,7 +589,7 @@ class MainHook : XposedModule() {
                     }
 
                     val context = runCatching {
-                        XposedHelpers.getObjectField(instanceOrNull, "mContext") as? Context
+                        ReflectCompat.getObjectField(instanceOrNull, "mContext") as? Context
                     }.getOrNull() ?: return@replaceAny callOriginal()
 
                     readAiSoundSetting(context, defaultValue = 1) == 1 && isAiSoundFeatureOpened()
@@ -598,7 +598,7 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun PackageParam.hookSuperResolutionSupportMethod(className: String, methodName: String) {
+    private fun HookScope.hookSuperResolutionSupportMethod(className: String, methodName: String) {
         findClass(className).hook {
             injectMember {
                 method {
@@ -618,19 +618,19 @@ class MainHook : XposedModule() {
 
     private fun resolveAiSoundCallbackPackage(callback: Any?): String? {
         return runCatching {
-            XposedHelpers.getObjectField(callback, "\$pkg") as? String
+            ReflectCompat.getObjectField(callback, "\$pkg") as? String
         }.getOrNull()
     }
 
     private fun resolveAiSoundCallbackContext(callback: Any?): Context? {
         return runCatching {
-            XposedHelpers.getObjectField(callback, "\$context") as? Context
+            ReflectCompat.getObjectField(callback, "\$context") as? Context
         }.getOrNull()
     }
 
     private fun resolveAiSoundCallbackItem(callback: Any?): Any? {
         return runCatching {
-            XposedHelpers.getObjectField(callback, "this\$0")
+            ReflectCompat.getObjectField(callback, "this\$0")
         }.getOrNull()
     }
 
@@ -638,8 +638,8 @@ class MainHook : XposedModule() {
         val classLoader = resolveGameHelperClassLoader() ?: context.classLoader
 
         return runCatching {
-            val utilClass = XposedHelpers.findClass("com.zui.util.SettingsValueUtilKt", classLoader)
-            XposedHelpers.callStaticMethod(
+            val utilClass = ReflectCompat.findClass("com.zui.util.SettingsValueUtilKt", classLoader)
+            ReflectCompat.callStaticMethod(
                 utilClass,
                 "getSystemInt",
                 AI_SOUND_SETTING_KEY,
@@ -657,8 +657,8 @@ class MainHook : XposedModule() {
     private fun writeAiSoundSetting(context: Context, value: Int) {
         val classLoader = resolveGameHelperClassLoader() ?: context.classLoader
         val stored = runCatching {
-            val utilClass = XposedHelpers.findClass("com.zui.util.SettingsValueUtilKt", classLoader)
-            XposedHelpers.callStaticMethod(
+            val utilClass = ReflectCompat.findClass("com.zui.util.SettingsValueUtilKt", classLoader)
+            ReflectCompat.callStaticMethod(
                 utilClass,
                 "setSystemInt",
                 AI_SOUND_SETTING_KEY,
@@ -684,17 +684,17 @@ class MainHook : XposedModule() {
         val classLoader = resolveGameHelperClassLoader() ?: return false
 
         return runCatching {
-            val itemClass = XposedHelpers.findClass(
+            val itemClass = ReflectCompat.findClass(
                 "com.zui.game.service.sys.item.ItemAISoundEnhancement",
                 classLoader,
             )
-            val featuresClass = XposedHelpers.findClass(
+            val featuresClass = ReflectCompat.findClass(
                 "com.zui.game.service.FeaturesBaseOnRomKt",
                 classLoader,
             )
-            val companion = XposedHelpers.getStaticObjectField(itemClass, "Companion")
-            val romFeatures = XposedHelpers.callStaticMethod(featuresClass, "getRomFeatures")
-            XposedHelpers.callMethod(companion, "isFeatureOpened", romFeatures) as? Boolean ?: false
+            val companion = ReflectCompat.getStaticObjectField(itemClass, "Companion")
+            val romFeatures = ReflectCompat.callStaticMethod(featuresClass, "getRomFeatures")
+            ReflectCompat.callMethod(companion, "isFeatureOpened", romFeatures) as? Boolean ?: false
         }.getOrElse {
             AndroidInternals.log("Failed to evaluate AI sound feature availability", it)
             false
@@ -706,10 +706,10 @@ class MainHook : XposedModule() {
 
         val status = if (enabled) 0 else 1
         runCatching {
-            XposedHelpers.callMethod(item, "setMStatus", status)
-            XposedHelpers.callMethod(item, "setMNoClick", true)
-            val liveData = XposedHelpers.callMethod(item, "getMStatusLive")
-            XposedHelpers.callMethod(liveData, "postValue", status)
+            ReflectCompat.callMethod(item, "setMStatus", status)
+            ReflectCompat.callMethod(item, "setMNoClick", true)
+            val liveData = ReflectCompat.callMethod(item, "getMStatusLive")
+            ReflectCompat.callMethod(liveData, "postValue", status)
         }.onFailure {
             AndroidInternals.log("Failed to apply AI sound item state", it)
         }
@@ -725,14 +725,14 @@ class MainHook : XposedModule() {
 
     private fun toggleAiSound(item: Any, context: Context) {
         val enable = runCatching {
-            (XposedHelpers.callMethod(item, "getMStatus") as? Int) != 0
+            (ReflectCompat.callMethod(item, "getMStatus") as? Int) != 0
         }.getOrElse {
             AndroidInternals.log("Failed to read current AI sound toggle state", it)
             true
         }
 
         runCatching {
-            XposedHelpers.callMethod(item, "change2Status", if (enable) 0 else 1)
+            ReflectCompat.callMethod(item, "change2Status", if (enable) 0 else 1)
         }.onFailure {
             AndroidInternals.log("Failed to toggle AI sound state through change2Status()", it)
             applyAiSoundState(item, context, enable)
@@ -758,8 +758,8 @@ class MainHook : XposedModule() {
         if (merged.isEmpty()) return
 
         runCatching {
-            XposedHelpers.setObjectField(viewModel, "knownGames", merged)
-            XposedHelpers.setObjectField(viewModel, "rowKnownGames", merged)
+            ReflectCompat.setObjectField(viewModel, "knownGames", merged)
+            ReflectCompat.setObjectField(viewModel, "rowKnownGames", merged)
         }.onFailure {
             AndroidInternals.log("Failed to merge Wide Vision knownGames lists", it)
         }
@@ -804,14 +804,14 @@ class MainHook : XposedModule() {
         val classLoader = resolveGameHelperClassLoader() ?: context.classLoader
 
         return runCatching {
-            val featuresClass = XposedHelpers.findClass(
+            val featuresClass = ReflectCompat.findClass(
                 "com.zui.game.service.FeaturesBaseOnRomKt",
                 classLoader,
             )
-            val romFeatures = XposedHelpers.callStaticMethod(featuresClass, "getRomFeatures")
+            val romFeatures = ReflectCompat.callStaticMethod(featuresClass, "getRomFeatures")
             linkedSetOf(
-                XposedHelpers.callMethod(romFeatures, "getSupportVibrationGameListArrayId") as? Int,
-                XposedHelpers.callMethod(romFeatures, "getSupportVibrationGameListArrayIdRow") as? Int,
+                ReflectCompat.callMethod(romFeatures, "getSupportVibrationGameListArrayId") as? Int,
+                ReflectCompat.callMethod(romFeatures, "getSupportVibrationGameListArrayIdRow") as? Int,
             ).filterNotNull().toSet()
         }.getOrElse {
             AndroidInternals.log("Failed to resolve vibration support array ids", it)
@@ -822,7 +822,7 @@ class MainHook : XposedModule() {
     private fun readStringArrayField(target: Any, fieldName: String): Array<String> {
         return runCatching {
             @Suppress("UNCHECKED_CAST")
-            ((XposedHelpers.getObjectField(target, fieldName) as? Array<*>)?.mapNotNull { it as? String }?.toTypedArray())
+            ((ReflectCompat.getObjectField(target, fieldName) as? Array<*>)?.mapNotNull { it as? String }?.toTypedArray())
                 ?: emptyArray()
         }.getOrElse {
             AndroidInternals.log("Failed to read $fieldName from ${target.javaClass.name}", it)
@@ -842,7 +842,7 @@ class MainHook : XposedModule() {
         return merged.toTypedArray()
     }
 
-    private fun HookParam.resolveRegisteredGamePackagesOrOriginal(source: String): Any? {
+    private fun HookCall.resolveRegisteredGamePackagesOrOriginal(source: String): Any? {
         val packages = resolveSupportedPackages()
         if (packages != null) {
             AndroidInternals.log("Resolved ${packages.size} SR whitelist packages for $source")
@@ -865,10 +865,10 @@ class MainHook : XposedModule() {
             var current: Any? = lambdaInstance
             for (depth in 0 until 6) {
                 val pkgName = runCatching {
-                    XposedHelpers.getObjectField(current, "pkgName") as? String
+                    ReflectCompat.getObjectField(current, "pkgName") as? String
                 }.getOrNull()
                 if (pkgName != null) return@runCatching pkgName
-                current = XposedHelpers.getObjectField(current, "this\$0")
+                current = ReflectCompat.getObjectField(current, "this\$0")
             }
             null
         }.getOrElse {
@@ -977,14 +977,14 @@ class MainHook : XposedModule() {
     }
 
     private fun resolveGameSettingFeatureKey(feature: Any?): String? {
-        return runCatching { XposedHelpers.callMethod(feature, "getKey") as? String }.getOrNull()
+        return runCatching { ReflectCompat.callMethod(feature, "getKey") as? String }.getOrNull()
     }
 
     private fun removeColorfulLightPreference(fragment: Any?) {
         if (isBaldurBoard()) return
 
         runCatching {
-            XposedHelpers.callMethod(
+            ReflectCompat.callMethod(
                 fragment,
                 "tryRemovePreference",
                 GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY,
@@ -1033,12 +1033,12 @@ class MainHook : XposedModule() {
     private fun resolveFloatingFeatureItems(controller: Any?): List<Any> {
         val rootView = resolveFloatingRootView(controller) ?: return emptyList()
         val liveData = runCatching {
-            XposedHelpers.callMethod(rootView, "getMFeatureListItems")
+            ReflectCompat.callMethod(rootView, "getMFeatureListItems")
         }.getOrNull() ?: return emptyList()
 
         @Suppress("UNCHECKED_CAST")
         return runCatching {
-            (XposedHelpers.callMethod(liveData, "getValue") as? List<Any?>)
+            (ReflectCompat.callMethod(liveData, "getValue") as? List<Any?>)
                 ?.filterNotNull()
                 ?: emptyList()
         }.getOrElse {
@@ -1049,21 +1049,21 @@ class MainHook : XposedModule() {
 
     private fun resolveFloatingRootView(controller: Any?): Any? {
         return runCatching {
-            XposedHelpers.getObjectField(controller, "mPortraitRootView")
+            ReflectCompat.getObjectField(controller, "mPortraitRootView")
         }.getOrNull() ?: runCatching {
-            XposedHelpers.getObjectField(controller, "mLandscapeRootView")
+            ReflectCompat.getObjectField(controller, "mLandscapeRootView")
         }.getOrNull()
     }
 
     private fun publishFloatingFeatureItems(controller: Any?, items: List<Any>) {
         val portraitChunkSize = resolvePortraitChunkSize()
         postFloatingItemsToRoot(
-            rootView = runCatching { XposedHelpers.getObjectField(controller, "mPortraitRootView") }.getOrNull(),
+            rootView = runCatching { ReflectCompat.getObjectField(controller, "mPortraitRootView") }.getOrNull(),
             featureItems = items,
             buttonChunkSize = portraitChunkSize,
         )
         postFloatingItemsToRoot(
-            rootView = runCatching { XposedHelpers.getObjectField(controller, "mLandscapeRootView") }.getOrNull(),
+            rootView = runCatching { ReflectCompat.getObjectField(controller, "mLandscapeRootView") }.getOrNull(),
             featureItems = items,
             buttonChunkSize = 6,
         )
@@ -1073,15 +1073,15 @@ class MainHook : XposedModule() {
         if (rootView == null) return
 
         runCatching {
-            val featureLiveData = XposedHelpers.callMethod(rootView, "getMFeatureListItems")
-            XposedHelpers.callMethod(featureLiveData, "postValue", featureItems)
+            val featureLiveData = ReflectCompat.callMethod(rootView, "getMFeatureListItems")
+            ReflectCompat.callMethod(featureLiveData, "postValue", featureItems)
         }.onFailure {
             AndroidInternals.log("Failed to publish floating feature items", it)
         }
 
         runCatching {
-            val buttonLiveData = XposedHelpers.callMethod(rootView, "getMButtonItemsPortrait")
-            XposedHelpers.callMethod(buttonLiveData, "postValue", featureItems.chunked(buttonChunkSize))
+            val buttonLiveData = ReflectCompat.callMethod(rootView, "getMButtonItemsPortrait")
+            ReflectCompat.callMethod(buttonLiveData, "postValue", featureItems.chunked(buttonChunkSize))
         }.onFailure {
             AndroidInternals.log("Failed to publish floating button items", it)
         }
@@ -1089,17 +1089,17 @@ class MainHook : XposedModule() {
 
     private fun resolvePortraitChunkSize(): Int {
         return runCatching {
-            val repositoryClass = XposedHelpers.findClass(
+            val repositoryClass = ReflectCompat.findClass(
                 "com.zui.game.service.data.Repository",
                 resolveGameHelperClassLoader(),
             )
-            val companion = XposedHelpers.getStaticObjectField(repositoryClass, "Companion")
-            XposedHelpers.callMethod(companion, "getMAX_DISPLAY_COUNT_PORTRAIT") as? Int
+            val companion = ReflectCompat.getStaticObjectField(repositoryClass, "Companion")
+            ReflectCompat.callMethod(companion, "getMAX_DISPLAY_COUNT_PORTRAIT") as? Int
         }.getOrNull() ?: 10
     }
 
     private fun resolveItemKey(item: Any?): String? {
-        return runCatching { XposedHelpers.callMethod(item, "getKey") as? String }.getOrNull()
+        return runCatching { ReflectCompat.callMethod(item, "getKey") as? String }.getOrNull()
     }
 
     private fun insertFloatingItemByFeatureOrder(
@@ -1131,14 +1131,14 @@ class MainHook : XposedModule() {
         val support = runCatching {
             val classLoader = resolveGameHelperClassLoader() ?: return false
             val context = runCatching {
-                XposedHelpers.callMethod(controller, "getContext") as? Context
+                ReflectCompat.callMethod(controller, "getContext") as? Context
             }.getOrNull() ?: return false
-            val vibrationToolClass = XposedHelpers.findClass(
+            val vibrationToolClass = ReflectCompat.findClass(
                 "com.zui.game.service.vibrate.VibrationToolKt",
                 classLoader,
             )
             @Suppress("UNCHECKED_CAST")
-            XposedHelpers.callStaticMethod(
+            ReflectCompat.callStaticMethod(
                 vibrationToolClass,
                 "isGameSupport4dVibration",
                 context,
@@ -1154,7 +1154,7 @@ class MainHook : XposedModule() {
 
     private fun resolveFourDVibrationItem(controller: Any?): Any? {
         return runCatching {
-            XposedHelpers.callMethod(controller, "getMItem4DVibrate")
+            ReflectCompat.callMethod(controller, "getMItem4DVibrate")
         }.getOrElse {
             AndroidInternals.log("Failed to resolve Item4DVibrate instance", it)
             null
@@ -1164,15 +1164,15 @@ class MainHook : XposedModule() {
     private fun resolveCurrentRomFeatureOrder(): List<String> {
         return runCatching {
             val classLoader = resolveGameHelperClassLoader() ?: return emptyList()
-            val featuresClass = XposedHelpers.findClass(
+            val featuresClass = ReflectCompat.findClass(
                 "com.zui.game.service.FeaturesBaseOnRomKt",
                 classLoader,
             )
-            val romFeatures = XposedHelpers.callStaticMethod(featuresClass, "getRomFeatures")
+            val romFeatures = ReflectCompat.callStaticMethod(featuresClass, "getRomFeatures")
             @Suppress("UNCHECKED_CAST")
-            (XposedHelpers.getObjectField(romFeatures, "keyList") as? List<Any?>)
+            (ReflectCompat.getObjectField(romFeatures, "keyList") as? List<Any?>)
                 ?.mapNotNull { featureKey ->
-                    runCatching { XposedHelpers.callMethod(featureKey, "getKey") as? String }.getOrNull()
+                    runCatching { ReflectCompat.callMethod(featureKey, "getKey") as? String }.getOrNull()
                 }
                 ?: emptyList()
         }.getOrElse {
@@ -1187,7 +1187,7 @@ class MainHook : XposedModule() {
     }
 
     private fun resolveKeyContainerFeatureKey(container: Any?): String? {
-        return runCatching { XposedHelpers.callMethod(container, "getKEY") as? String }.getOrNull()
+        return runCatching { ReflectCompat.callMethod(container, "getKEY") as? String }.getOrNull()
     }
 
     private fun normalizeFeatureKeys(keys: Collection<String>): Array<String> {
@@ -1204,7 +1204,7 @@ class MainHook : XposedModule() {
     private fun patchExistingRomFeatureSets() {
         runCatching {
             val classLoader = resolveGameHelperClassLoader() ?: return
-            val featuresClass = XposedHelpers.findClass("com.zui.game.service.FeaturesBaseOnRomKt", classLoader)
+            val featuresClass = ReflectCompat.findClass("com.zui.game.service.FeaturesBaseOnRomKt", classLoader)
             var patchedCount = 0
 
             featuresClass.declaredFields
@@ -1223,13 +1223,13 @@ class MainHook : XposedModule() {
 
     private fun patchRomFeatureKeyList(romFeatures: Any?) {
         val keyList = runCatching {
-            XposedHelpers.getObjectField(romFeatures, "keyList") as? List<Any?>
+            ReflectCompat.getObjectField(romFeatures, "keyList") as? List<Any?>
         }.getOrNull() ?: return
 
         val normalized = LinkedHashMap<String, Any>()
         keyList.forEach { featureKey ->
             if (featureKey == null) return@forEach
-            val key = runCatching { XposedHelpers.callMethod(featureKey, "getKey") as? String }.getOrNull() ?: return@forEach
+            val key = runCatching { ReflectCompat.callMethod(featureKey, "getKey") as? String }.getOrNull() ?: return@forEach
             if (key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard()) return@forEach
             normalized[key] = featureKey
         }
@@ -1258,7 +1258,7 @@ class MainHook : XposedModule() {
         }
 
         runCatching {
-            XposedHelpers.setObjectField(romFeatures, "keyList", ArrayList(normalized.values))
+            ReflectCompat.setObjectField(romFeatures, "keyList", ArrayList(normalized.values))
         }.onFailure {
             AndroidInternals.log("Failed to overwrite RomFeatures key list", it)
         }
@@ -1296,10 +1296,10 @@ class MainHook : XposedModule() {
     private fun createFeatureKeys(keys: Array<String>): List<Any> {
         return runCatching {
             val classLoader = resolveGameHelperClassLoader() ?: return emptyList()
-            val featureKeyClass = XposedHelpers.findClass("com.zui.game.service.FeatureKey", classLoader)
-            val companion = XposedHelpers.getStaticObjectField(featureKeyClass, "Companion")
+            val featureKeyClass = ReflectCompat.findClass("com.zui.game.service.FeatureKey", classLoader)
+            val companion = ReflectCompat.getStaticObjectField(featureKeyClass, "Companion")
             @Suppress("UNCHECKED_CAST")
-            XposedHelpers.callMethod(companion, "createByKeys", keys) as? List<Any> ?: emptyList()
+            ReflectCompat.callMethod(companion, "createByKeys", keys) as? List<Any> ?: emptyList()
         }.getOrElse {
             AndroidInternals.log("Failed to create FeatureKey instances", it)
             emptyList()
@@ -1322,7 +1322,7 @@ class MainHook : XposedModule() {
                 ?: resolveProcessApplicationContext()?.javaClass?.classLoader
                 ?: Thread.currentThread().contextClassLoader
 
-            XposedHelpers.findClass(className, resolvedClassLoader).declaredMethods.any {
+            ReflectCompat.findClass(className, resolvedClassLoader).declaredMethods.any {
                 it.name == methodName && it.parameterTypes.size == paramCount
             }
         }.getOrDefault(false)
@@ -1330,8 +1330,8 @@ class MainHook : XposedModule() {
 
     private fun resolveProcessApplicationContext(): Context? {
         return runCatching {
-            XposedHelpers.callStaticMethod(
-                XposedHelpers.findClass("android.app.ActivityThread", null),
+            ReflectCompat.callStaticMethod(
+                ReflectCompat.findClass("android.app.ActivityThread", null),
                 "currentApplication",
             ) as? Context
         }.getOrElse {
@@ -1342,7 +1342,7 @@ class MainHook : XposedModule() {
 
     private fun resolveSystemContext(instance: Any? = null): Context? {
         (instance?.let {
-            runCatching { XposedHelpers.getObjectField(it, "mContext") as? Context }.getOrNull()
+            runCatching { ReflectCompat.getObjectField(it, "mContext") as? Context }.getOrNull()
         } ?: systemContext)?.let { context ->
             rememberSystemContext(context)
             return context
@@ -1356,13 +1356,13 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun HookParam.ensureLsrRegistered() {
+    private fun HookCall.ensureLsrRegistered() {
         if (!AndroidInternals.useCompatibilityLsr()) {
             return
         }
         runCatching {
             val systemServer = instance<Any>()
-            val context = XposedHelpers.getObjectField(systemServer, "mSystemContext") as? Context ?: return
+            val context = ReflectCompat.getObjectField(systemServer, "mSystemContext") as? Context ?: return
             rememberSystemContext(context)
             LsrServiceRegistry.ensureRegistered(context)
         }.onFailure {
@@ -1375,7 +1375,7 @@ class MainHook : XposedModule() {
     // can still obtain lenovosr when SELinux blocks addService().
     // -------------------------------------------------------------------------
 
-    private fun PackageParam.installLsrServiceManagerFallback() {
+    private fun HookScope.installLsrServiceManagerFallback() {
         findClass("android.os.ServiceManager").hook {
             injectMember {
                 method {

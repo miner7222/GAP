@@ -7,10 +7,6 @@ import java.lang.reflect.Constructor
 import java.lang.reflect.Executable
 import java.lang.reflect.Method
 
-internal typealias PackageParam = HookScope
-internal typealias HookParam = HookParamCompat
-internal typealias XposedHelpers = XposedHelpersCompat
-
 internal class HookScope(
     private val module: XposedModule,
     val appClassLoader: ClassLoader,
@@ -48,34 +44,34 @@ internal class MemberHookBuilder(
         methodSpec = MethodSpec().apply(block)
     }
 
-    fun beforeHook(block: HookParamCompat.() -> Unit) {
+    fun beforeHook(block: HookCall.() -> Unit) {
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
             .intercept { chain ->
-                val param = HookParamCompat(chain)
+                val param = HookCall(chain)
                 param.block()
                 chain.proceed(param.args)
             }
     }
 
-    fun afterHook(block: HookParamCompat.() -> Unit) {
+    fun afterHook(block: HookCall.() -> Unit) {
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
             .intercept { chain ->
-                val param = HookParamCompat(chain, chain.proceed())
+                val param = HookCall(chain, chain.proceed())
                 param.block()
                 param.result
             }
     }
 
-    fun replaceAny(block: HookParamCompat.() -> Any?) {
+    fun replaceAny(block: HookCall.() -> Any?) {
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
             .intercept { chain ->
-                HookParamCompat(chain).block()
+                HookCall(chain).block()
             }
     }
 
@@ -130,7 +126,7 @@ internal class MethodSpec {
     }
 }
 
-internal class HookParamCompat(
+internal class HookCall(
     private val chain: XposedInterface.Chain,
     initialResult: Any? = null,
 ) {
@@ -144,7 +140,7 @@ internal class HookParamCompat(
     fun callOriginal(): Any? = chain.proceed(args)
 }
 
-internal object XposedHelpersCompat {
+internal object ReflectCompat {
     fun findClass(className: String, classLoader: ClassLoader?): Class<*> {
         return Class.forName(className, false, classLoader)
     }
