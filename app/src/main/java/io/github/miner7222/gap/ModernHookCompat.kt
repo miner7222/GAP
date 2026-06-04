@@ -11,108 +11,148 @@ internal class HookScope(
     private val module: XposedModule,
     val appClassLoader: ClassLoader,
 ) {
-    fun findClass(name: String): ClassHookTarget {
-        return ClassHookTarget(module, Class.forName(name, false, appClassLoader))
-    }
-}
-
-internal class ClassHookTarget(
-    private val module: XposedModule,
-    private val targetClass: Class<*>,
-) {
-    fun hook(block: ClassHookBuilder.() -> Unit) {
-        ClassHookBuilder(module, targetClass).apply(block)
-    }
-}
-
-internal class ClassHookBuilder(
-    private val module: XposedModule,
-    private val targetClass: Class<*>,
-) {
-    fun injectMember(block: MemberHookBuilder.() -> Unit) {
-        MemberHookBuilder(module, targetClass).apply(block)
-    }
-}
-
-internal class MemberHookBuilder(
-    private val module: XposedModule,
-    private val targetClass: Class<*>,
-) {
-    private var methodSpec: MethodSpec? = null
-
-    fun method(block: MethodSpec.() -> Unit) {
-        methodSpec = MethodSpec().apply(block)
+    fun beforeMethod(
+        className: String,
+        methodName: String,
+        vararg parameterTypes: Class<*>,
+        block: HookCall.() -> Unit,
+    ) {
+        hookMethod(
+            className = className,
+            methodName = methodName,
+            parameterTypes = parameterTypes,
+        ) { chain -> HookChainRunner.runBefore(chain, block) }
     }
 
-    fun before(block: HookCall.() -> Unit) {
-        val executable = resolveExecutable()
+    fun beforeMethod(
+        className: String,
+        methodName: String,
+        parameterCount: Int,
+        block: HookCall.() -> Unit,
+    ) {
+        hookMethod(
+            className = className,
+            methodName = methodName,
+            parameterCount = parameterCount,
+        ) { chain -> HookChainRunner.runBefore(chain, block) }
+    }
+
+    fun afterMethod(
+        className: String,
+        methodName: String,
+        vararg parameterTypes: Class<*>,
+        block: HookCall.() -> Unit,
+    ) {
+        hookMethod(
+            className = className,
+            methodName = methodName,
+            parameterTypes = parameterTypes,
+        ) { chain -> HookChainRunner.runAfter(chain, block) }
+    }
+
+    fun afterMethod(
+        className: String,
+        methodName: String,
+        parameterCount: Int,
+        block: HookCall.() -> Unit,
+    ) {
+        hookMethod(
+            className = className,
+            methodName = methodName,
+            parameterCount = parameterCount,
+        ) { chain -> HookChainRunner.runAfter(chain, block) }
+    }
+
+    fun replaceMethod(
+        className: String,
+        methodName: String,
+        vararg parameterTypes: Class<*>,
+        block: HookCall.() -> Any?,
+    ) {
+        hookMethod(
+            className = className,
+            methodName = methodName,
+            parameterTypes = parameterTypes,
+        ) { chain -> HookChainRunner.runReplace(chain, block) }
+    }
+
+    fun replaceMethod(
+        className: String,
+        methodName: String,
+        parameterCount: Int,
+        block: HookCall.() -> Any?,
+    ) {
+        hookMethod(
+            className = className,
+            methodName = methodName,
+            parameterCount = parameterCount,
+        ) { chain -> HookChainRunner.runReplace(chain, block) }
+    }
+
+    fun replaceMethodWithTrue(
+        className: String,
+        methodName: String,
+        vararg parameterTypes: Class<*>,
+    ) {
+        replaceMethod(className, methodName, *parameterTypes) { true }
+    }
+
+    private fun hookMethod(
+        className: String,
+        methodName: String,
+        parameterTypes: Array<out Class<*>>? = null,
+        parameterCount: Int? = null,
+        block: (XposedInterface.Chain) -> Any?,
+    ) {
+        val executable = resolveExecutable(className, methodName, parameterTypes, parameterCount)
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
-            .intercept { chain -> HookChainRunner.runBefore(chain, block) }
+            .intercept(block)
     }
 
-    fun after(block: HookCall.() -> Unit) {
-        val executable = resolveExecutable()
-        module.hook(executable)
-            .setExceptionMode(ExceptionMode.PROTECTIVE)
-            .intercept { chain -> HookChainRunner.runAfter(chain, block) }
-    }
-
-    fun replace(block: HookCall.() -> Any?) {
-        val executable = resolveExecutable()
-        module.hook(executable)
-            .setExceptionMode(ExceptionMode.PROTECTIVE)
-            .intercept { chain -> HookChainRunner.runReplace(chain, block) }
-    }
-
-    fun replaceWithTrue() {
-        replace { true }
-    }
-
-    private fun resolveExecutable(): Executable {
-        val spec = requireNotNull(methodSpec) { "method block must be declared before hook callback" }
-        val name = requireNotNull(spec.name) { "method name is required" }
-        val executable = if (name == CONSTRUCTOR_NAME) {
-            targetClass.declaredConstructors.firstOrNull { spec.matches(it.parameterTypes) }
+    private fun resolveExecutable(
+        className: String,
+        methodName: String,
+        parameterTypes: Array<out Class<*>>?,
+        parameterCount: Int?,
+    ): Executable {
+        val targetClass = Class.forName(className, false, appClassLoader)
+        val executable = if (methodName == CONSTRUCTOR_NAME) {
+            targetClass.declaredConstructors.firstOrNull {
+                matchesParameters(it.parameterTypes, parameterTypes, parameterCount)
+            }
         } else {
-            targetClass.declaredMethods.firstOrNull { it.name == name && spec.matches(it.parameterTypes) }
-        } ?: throw NoSuchMethodException("${targetClass.name}#$name/${spec.describeParams()}")
+            targetClass.declaredMethods.firstOrNull {
+                it.name == methodName && matchesParameters(it.parameterTypes, parameterTypes, parameterCount)
+            }
+        } ?: throw NoSuchMethodException(
+            "${targetClass.name}#$methodName/${describeParameters(parameterTypes, parameterCount)}",
+        )
         executable.isAccessible = true
         return executable
     }
 
+    private fun matchesParameters(
+        actualTypes: Array<Class<*>>,
+        parameterTypes: Array<out Class<*>>?,
+        parameterCount: Int?,
+    ): Boolean {
+        parameterTypes?.let { expectedTypes ->
+            return actualTypes.size == expectedTypes.size && actualTypes.zip(expectedTypes).all { (actual, expected) ->
+                actual == expected
+            }
+        }
+        return parameterCount?.let { actualTypes.size == it } ?: actualTypes.isEmpty()
+    }
+
+    private fun describeParameters(parameterTypes: Array<out Class<*>>?, parameterCount: Int?): String {
+        return parameterTypes?.joinToString(prefix = "(", postfix = ")") { it.name }
+            ?: parameterCount?.toString()
+            ?: "any"
+    }
+
     private companion object {
         private const val CONSTRUCTOR_NAME = "<init>"
-    }
-}
-
-internal class MethodSpec {
-    var name: String? = null
-    var paramCount: Int? = null
-    private var paramTypes: Array<out Class<*>>? = null
-
-    fun emptyParam() {
-        paramCount = 0
-        paramTypes = emptyArray()
-    }
-
-    fun param(vararg types: Class<*>) {
-        paramTypes = types
-        paramCount = types.size
-    }
-
-    fun matches(actualTypes: Array<Class<*>>): Boolean {
-        paramTypes?.let { expectedTypes ->
-            return actualTypes.size == expectedTypes.size &&
-                actualTypes.zip(expectedTypes).all { (actual, expected) -> actual == expected }
-        }
-        return paramCount?.let { actualTypes.size == it } ?: true
-    }
-
-    fun describeParams(): String {
-        return paramTypes?.joinToString(prefix = "(", postfix = ")") { it.name }
-            ?: paramCount?.toString()
-            ?: "any"
     }
 }
 

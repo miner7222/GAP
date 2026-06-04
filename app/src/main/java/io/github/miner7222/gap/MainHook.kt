@@ -92,34 +92,14 @@ class MainHook : XposedModule() {
 
             // Register the compatibility Binder service early in system_server
             // so Game Helper can bind to lenovosr on non-Baldur devices.
-            findClass("com.android.server.SystemServer").hook {
-                injectMember {
-                    method {
-                        name = "startBootstrapServices"
-                        paramCount = 1
-                    }
-                    after {
-                        ensureLsrRegistered()
-                    }
-                }
-                injectMember {
-                    method {
-                        name = "startCoreServices"
-                        paramCount = 1
-                    }
-                    after {
-                        ensureLsrRegistered()
-                    }
-                }
-                injectMember {
-                    method {
-                        name = "startOtherServices"
-                        paramCount = 1
-                    }
-                    after {
-                        ensureLsrRegistered()
-                    }
-                }
+            afterMethod("com.android.server.SystemServer", "startBootstrapServices", parameterCount = 1) {
+                ensureLsrRegistered()
+            }
+            afterMethod("com.android.server.SystemServer", "startCoreServices", parameterCount = 1) {
+                ensureLsrRegistered()
+            }
+            afterMethod("com.android.server.SystemServer", "startOtherServices", parameterCount = 1) {
+                ensureLsrRegistered()
             }
         } else {
             AndroidInternals.log("Skipping compatibility lenovosr bootstrap hooks")
@@ -145,15 +125,7 @@ class MainHook : XposedModule() {
 
         if (!isBaldurBoard()) {
             // Make Game Helper follow the Baldur feature path on non-Baldur devices.
-            findClass("com.zui.util.DeviceUtils").hook {
-                injectMember {
-                    method {
-                        name = "isBaldur"
-                        emptyParam()
-                    }
-                    replaceWithTrue()
-                }
-            }
+            replaceMethodWithTrue("com.zui.util.DeviceUtils", "isBaldur")
         }
 
         // Normalize the floating-bar feature inventory itself, then backstop the
@@ -178,241 +150,163 @@ class MainHook : XposedModule() {
     }
 
     private fun HookScope.installRomFeatureHooks() {
-        findClass("com.zui.game.service.RomFeatures").hook {
-            injectMember {
-                method {
-                    name = "isFeatureOpen"
-                    param(String::class.java)
-                }
-                replace {
-                    when (args.firstOrNull() as? String) {
-                        SUPER_RESOLUTION_FEATURE_KEY -> true
-                        FOUR_D_VIBRATE_FEATURE_KEY -> true
-                        COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
-                        else -> callOriginal()
-                    }
-                }
-            }
-            injectMember {
-                method {
-                    name = "getKeyList"
-                    emptyParam()
-                }
-                after {
-                    patchRomFeatureKeyList(instanceOrNull)
-                    result = runCatching {
-                        @Suppress("UNCHECKED_CAST")
-                        ReflectCompat.getObjectField(instanceOrNull, "keyList") as? List<Any?>
-                    }.getOrNull() ?: result
-                }
+        replaceMethod("com.zui.game.service.RomFeatures", "isFeatureOpen", String::class.java) {
+            when (args.firstOrNull() as? String) {
+                SUPER_RESOLUTION_FEATURE_KEY -> true
+                FOUR_D_VIBRATE_FEATURE_KEY -> true
+                COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
+                else -> callOriginal()
             }
         }
 
-        findClass("com.zui.game.service.sys.item.KeyContainer").hook {
-            injectMember {
-                method {
-                    name = "isFeatureOpened"
-                    paramCount = 1
-                }
-                replace {
-                    when (resolveKeyContainerFeatureKey(instanceOrNull)) {
-                        SUPER_RESOLUTION_FEATURE_KEY -> true
-                        FOUR_D_VIBRATE_FEATURE_KEY -> true
-                        COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
-                        else -> callOriginal()
-                    }
-                }
+        afterMethod("com.zui.game.service.RomFeatures", "getKeyList") {
+            patchRomFeatureKeyList(instanceOrNull)
+            result = runCatching {
+                @Suppress("UNCHECKED_CAST")
+                ReflectCompat.getObjectField(instanceOrNull, "keyList") as? List<Any?>
+            }.getOrNull() ?: result
+        }
+
+        replaceMethod(
+            "com.zui.game.service.sys.item.KeyContainer",
+            "isFeatureOpened",
+            parameterCount = 1,
+        ) {
+            when (resolveKeyContainerFeatureKey(instanceOrNull)) {
+                SUPER_RESOLUTION_FEATURE_KEY -> true
+                FOUR_D_VIBRATE_FEATURE_KEY -> true
+                COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
+                else -> callOriginal()
             }
         }
 
-        findClass("com.zui.game.service.FeatureKey\$Companion").hook {
-            injectMember {
-                method {
-                    name = "createByKeys"
-                    param(Array<String>::class.java)
-                }
-                before {
-                    val keys = (args.firstOrNull() as? Array<*>)?.mapNotNull { it as? String } ?: return@before
-                    val normalized = normalizeFeatureKeys(keys)
-                    if (keys.size != normalized.size || keys.toList() != normalized.toList()) {
-                        AndroidInternals.log("Normalized FeatureKey list from ${keys.size} to ${normalized.size}")
-                    }
-                    args[0] = normalized
-                }
+        beforeMethod(
+            "com.zui.game.service.FeatureKey\$Companion",
+            "createByKeys",
+            Array<String>::class.java,
+        ) {
+            val keys = (args.firstOrNull() as? Array<*>)?.mapNotNull { it as? String } ?: return@beforeMethod
+            val normalized = normalizeFeatureKeys(keys)
+            if (keys.size != normalized.size || keys.toList() != normalized.toList()) {
+                AndroidInternals.log("Normalized FeatureKey list from ${keys.size} to ${normalized.size}")
             }
+            args[0] = normalized
         }
 
         patchExistingRomFeatureSets()
     }
 
     private fun HookScope.installGameSettingFeatureHooks() {
-        findClass("com.zui.ugame.gamesetting.feature.FeatureList").hook {
-            injectMember {
-                method {
-                    name = "list"
-                    emptyParam()
-                }
-                replace {
-                    val original = runCatching {
-                        @Suppress("UNCHECKED_CAST")
-                        callOriginal() as? List<Any?>
-                    }.getOrNull() ?: emptyList()
+        replaceMethod("com.zui.ugame.gamesetting.feature.FeatureList", "list") {
+            val original = runCatching {
+                @Suppress("UNCHECKED_CAST")
+                callOriginal() as? List<Any?>
+            }.getOrNull() ?: emptyList()
 
-                    if (isBaldurBoard()) {
-                        original
-                    } else {
-                        original.filterNot {
-                            it?.javaClass?.name == "com.zui.ugame.gamesetting.feature.FEATURE_COLORFUL_LIGHT"
-                        }
-                    }
+            if (isBaldurBoard()) {
+                original
+            } else {
+                original.filterNot {
+                    it?.javaClass?.name == "com.zui.ugame.gamesetting.feature.FEATURE_COLORFUL_LIGHT"
                 }
             }
         }
 
         // The settings screen also keeps a static XML entry, so remove it after inflation.
-        findClass("com.zui.ugame.gamesetting.ui.options.SaverGameSettingsExtension").hook {
-            injectMember {
-                method {
-                    name = "onCreatePreferences"
-                    paramCount = 2
-                }
-                after {
-                    removeColorfulLightPreference(instanceOrNull)
-                }
-            }
-            injectMember {
-                method {
-                    name = "onResume"
-                    emptyParam()
-                }
-                after {
-                    removeColorfulLightPreference(instanceOrNull)
-                }
-            }
+        afterMethod(
+            "com.zui.ugame.gamesetting.ui.options.SaverGameSettingsExtension",
+            "onCreatePreferences",
+            parameterCount = 2,
+        ) {
+            removeColorfulLightPreference(instanceOrNull)
+        }
+        afterMethod("com.zui.ugame.gamesetting.ui.options.SaverGameSettingsExtension", "onResume") {
+            removeColorfulLightPreference(instanceOrNull)
         }
 
         // Backstop the ViewModel cache in case it was built before FeatureList.list() was filtered.
-        findClass("com.zui.ugame.gamesetting.ui.options.SaverGameSettingsExtensionViewModel").hook {
-            injectMember {
-                method {
-                    name = "getFeatureList"
-                    emptyParam()
-                }
-                replace {
-                    val original = runCatching {
-                        @Suppress("UNCHECKED_CAST")
-                        callOriginal() as? List<Any?>
-                    }.getOrNull() ?: emptyList()
-                    normalizeGameSettingFeatureList(original)
-                }
-            }
+        replaceMethod(
+            "com.zui.ugame.gamesetting.ui.options.SaverGameSettingsExtensionViewModel",
+            "getFeatureList",
+        ) {
+            val original = runCatching {
+                @Suppress("UNCHECKED_CAST")
+                callOriginal() as? List<Any?>
+            }.getOrNull() ?: emptyList()
+            normalizeGameSettingFeatureList(original)
         }
 
-        findClass("com.zui.ugame.gamesetting.feature.FEATURE_SUPER_RESOLUTION").hook {
-            injectMember {
-                method {
-                    name = "isEnable"
-                    param(Context::class.java)
-                }
-                replaceWithTrue()
-            }
-        }
+        replaceMethodWithTrue(
+            "com.zui.ugame.gamesetting.feature.FEATURE_SUPER_RESOLUTION",
+            "isEnable",
+            Context::class.java,
+        )
 
-        findClass("com.zui.ugame.gamesetting.feature.FEATURE_COLORFUL_LIGHT").hook {
-            injectMember {
-                method {
-                    name = "isEnable"
-                    param(Context::class.java)
-                }
-                replace {
-                    isBaldurBoard()
-                }
-            }
-            injectMember {
-                method {
-                    name = "onPreferenceTreeClick"
-                    paramCount = 3
-                }
-                replace {
-                    if (isBaldurBoard()) callOriginal() else false
-                }
-            }
+        replaceMethod("com.zui.ugame.gamesetting.feature.FEATURE_COLORFUL_LIGHT", "isEnable", Context::class.java) {
+            isBaldurBoard()
+        }
+        replaceMethod(
+            "com.zui.ugame.gamesetting.feature.FEATURE_COLORFUL_LIGHT",
+            "onPreferenceTreeClick",
+            parameterCount = 3,
+        ) {
+            if (isBaldurBoard()) callOriginal() else false
         }
     }
 
     private fun HookScope.installSuperResolutionAvailabilityHooks() {
-        findClass("com.zui.game.service.di.Settings").hook {
-            injectMember {
-                method {
-                    name = "getSupportSuperResolution"
-                    emptyParam()
-                }
-                replaceWithTrue()
-            }
-        }
+        replaceMethodWithTrue("com.zui.game.service.di.Settings", "getSupportSuperResolution")
 
         installSuperResolutionResourceHooks()
 
         // Backstop the rendered list so stale SR buttons cannot survive after
         // the runtime whitelist changes.
-        findClass("com.zui.game.service.ui.GameHelperViewController\$getCurrentView\$1\$1").hook {
-            injectMember {
-                method {
-                    name = "emit"
-                    paramCount = 2
-                }
-                after {
-                    val controller = runCatching {
-                        ReflectCompat.getObjectField(instanceOrNull, "this\$0")
-                    }.getOrNull()
-                    normalizeFloatingBarItems(controller, "getCurrentView collector")
-                    // If the LiveData was empty (list not populated yet), schedule a
-                    // retry after the current message finishes so the original code
-                    // has a chance to fill the list first.
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        normalizeFloatingBarItems(controller, "getCurrentView collector (deferred)")
-                    }
-                }
+        afterMethod(
+            "com.zui.game.service.ui.GameHelperViewController\$getCurrentView\$1\$1",
+            "emit",
+            parameterCount = 2,
+        ) {
+            val controller = runCatching {
+                ReflectCompat.getObjectField(instanceOrNull, "this\$0")
+            }.getOrNull()
+            normalizeFloatingBarItems(controller, "getCurrentView collector")
+            // If the LiveData was empty (list not populated yet), schedule a
+            // retry after the current message finishes so the original code
+            // has a chance to fill the list first.
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                normalizeFloatingBarItems(controller, "getCurrentView collector (deferred)")
             }
         }
     }
 
     private fun HookScope.installSuperResolutionResourceHooks() {
-        findClass("android.content.res.Resources").hook {
-            injectMember {
-                method {
-                    name = "getStringArray"
-                    param(Int::class.javaPrimitiveType!!)
-                }
-                replace {
-                    val resources = instanceOrNull as? Resources ?: return@replace callOriginal()
-                    val resId = args.firstOrNull() as? Int ?: return@replace callOriginal()
-                    val entryName = runCatching { resources.getResourceEntryName(resId) }.getOrNull()
-                    val packageName = runCatching { resources.getResourcePackageName(resId) }.getOrNull()
+        replaceMethod("android.content.res.Resources", "getStringArray", Int::class.javaPrimitiveType!!) {
+            val resources = instanceOrNull as? Resources ?: return@replaceMethod callOriginal()
+            val resId = args.firstOrNull() as? Int ?: return@replaceMethod callOriginal()
+            val entryName = runCatching { resources.getResourceEntryName(resId) }.getOrNull()
+            val packageName = runCatching { resources.getResourcePackageName(resId) }.getOrNull()
 
-                    if (entryName != GAME_RESOLUTION_APPS_ARRAY || packageName != GAME_HELPER_PACKAGE) {
-                        return@replace callOriginal()
-                    }
+            if (entryName != GAME_RESOLUTION_APPS_ARRAY || packageName != GAME_HELPER_PACKAGE) {
+                return@replaceMethod callOriginal()
+            }
 
-                    val originalEntries = runCatching {
-                        (callOriginal() as? Array<*>)
-                            ?.mapNotNull { it as? String }
-                            ?.toTypedArray()
-                    }.getOrElse {
-                        AndroidInternals.log("Failed to read stock $GAME_RESOLUTION_APPS_ARRAY entries", it)
-                        null
-                    } ?: return@replace emptyArray<String>()
+            val originalEntries = runCatching {
+                (callOriginal() as? Array<*>)
+                    ?.mapNotNull { it as? String }
+                    ?.toTypedArray()
+            }.getOrElse {
+                AndroidInternals.log("Failed to read stock $GAME_RESOLUTION_APPS_ARRAY entries", it)
+                null
+            } ?: return@replaceMethod emptyArray<String>()
 
-                    val overriddenEntries = resolveSuperResolutionArrayEntries(originalEntries)
-                    if (overriddenEntries != null) {
-                        AndroidInternals.log(
-                            "Replaced $GAME_RESOLUTION_APPS_ARRAY with ${overriddenEntries.size} runtime entries",
-                        )
-                        overriddenEntries
-                    } else {
-                        originalEntries
-                    }
-                }
+            val overriddenEntries = resolveSuperResolutionArrayEntries(originalEntries)
+            if (overriddenEntries != null) {
+                AndroidInternals.log(
+                    "Replaced $GAME_RESOLUTION_APPS_ARRAY with ${overriddenEntries.size} runtime entries",
+                )
+                overriddenEntries
+            } else {
+                originalEntries
             }
         }
     }
@@ -450,16 +344,8 @@ class MainHook : XposedModule() {
             return
         }
 
-        findClass(className).hook {
-            injectMember {
-                method {
-                    name = methodName
-                    paramCount = 2
-                }
-                after {
-                    mergeWideVisionKnownGames(instanceOrNull)
-                }
-            }
+        afterMethod(className, methodName, parameterCount = 2) {
+            mergeWideVisionKnownGames(instanceOrNull)
         }
     }
 
@@ -471,30 +357,22 @@ class MainHook : XposedModule() {
             return
         }
 
-        findClass(className).hook {
-            injectMember {
-                method {
-                    name = methodName
-                    paramCount = 2
-                }
-                replace {
-                    val context = args.firstOrNull() as? Context
-                    val packageName = args.getOrNull(1) as? String
-                    val original = runCatching {
-                        @Suppress("UNCHECKED_CAST")
-                        (callOriginal() as? List<Any?>) ?: emptyList()
-                    }.getOrElse {
-                        AndroidInternals.log("Failed to call original $className#$methodName", it)
-                        emptyList()
-                    }
-
-                    if (context == null) {
-                        return@replace original.mapNotNull { it as? String }
-                    }
-
-                    mergeVibrationSupportKeys(context, packageName, original)
-                }
+        replaceMethod(className, methodName, parameterCount = 2) {
+            val context = args.firstOrNull() as? Context
+            val packageName = args.getOrNull(1) as? String
+            val original = runCatching {
+                @Suppress("UNCHECKED_CAST")
+                (callOriginal() as? List<Any?>) ?: emptyList()
+            }.getOrElse {
+                AndroidInternals.log("Failed to call original $className#$methodName", it)
+                emptyList()
             }
+
+            if (context == null) {
+                return@replaceMethod original.mapNotNull { it as? String }
+            }
+
+            mergeVibrationSupportKeys(context, packageName, original)
         }
     }
 
@@ -506,22 +384,14 @@ class MainHook : XposedModule() {
             return
         }
 
-        findClass(className).hook {
-            injectMember {
-                method {
-                    name = methodName
-                    paramCount = 2
-                }
-                after {
-                    val context = args.firstOrNull() as? Context ?: return@after
-                    val packageName = args.getOrNull(1) as? String ?: return@after
-                    if (!isAiSoundSupportedPackage(packageName)) return@after
+        afterMethod(className, methodName, parameterCount = 2) {
+            val context = args.firstOrNull() as? Context ?: return@afterMethod
+            val packageName = args.getOrNull(1) as? String ?: return@afterMethod
+            if (!isAiSoundSupportedPackage(packageName)) return@afterMethod
 
-                    val enabled = readAiSoundSetting(context, defaultValue = 1) == 1
-                    applyAiSoundState(instanceOrNull, context, enabled)
-                    result = if (enabled) 0 else 1
-                }
-            }
+            val enabled = readAiSoundSetting(context, defaultValue = 1) == 1
+            applyAiSoundState(instanceOrNull, context, enabled)
+            result = if (enabled) 0 else 1
         }
     }
 
@@ -532,41 +402,27 @@ class MainHook : XposedModule() {
             return
         }
 
-        findClass(className).hook {
-            injectMember {
-                method {
-                    name = "onNoClick"
-                    emptyParam()
-                }
-                replace {
-                    val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
-                        ?: return@replace callOriginal()
-                    if (!isAiSoundSupportedPackage(packageName)) {
-                        return@replace callOriginal()
-                    }
-
-                    val context = resolveAiSoundCallbackContext(instanceOrNull)
-                        ?: return@replace callOriginal()
-                    val item = resolveAiSoundCallbackItem(instanceOrNull)
-                        ?: return@replace callOriginal()
-                    toggleAiSound(item, context)
-                    null
-                }
+        replaceMethod(className, "onNoClick") {
+            val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
+                ?: return@replaceMethod callOriginal()
+            if (!isAiSoundSupportedPackage(packageName)) {
+                return@replaceMethod callOriginal()
             }
 
-            injectMember {
-                method {
-                    name = "onToast"
-                    emptyParam()
-                }
-                replace {
-                    val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
-                    if (packageName != null && isAiSoundSupportedPackage(packageName)) {
-                        return@replace null
-                    }
-                    callOriginal()
-                }
+            val context = resolveAiSoundCallbackContext(instanceOrNull)
+                ?: return@replaceMethod callOriginal()
+            val item = resolveAiSoundCallbackItem(instanceOrNull)
+                ?: return@replaceMethod callOriginal()
+            toggleAiSound(item, context)
+            null
+        }
+
+        replaceMethod(className, "onToast") {
+            val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
+            if (packageName != null && isAiSoundSupportedPackage(packageName)) {
+                return@replaceMethod null
             }
+            callOriginal()
         }
     }
 
@@ -578,39 +434,23 @@ class MainHook : XposedModule() {
             return
         }
 
-        findClass(className).hook {
-            injectMember {
-                method {
-                    name = methodName
-                    paramCount = 1
-                }
-                replace {
-                    val packageName = args.firstOrNull() as? String ?: return@replace callOriginal()
-                    if (!isAiSoundSupportedPackage(packageName)) {
-                        return@replace callOriginal()
-                    }
-
-                    val context = runCatching {
-                        ReflectCompat.getObjectField(instanceOrNull, "mContext") as? Context
-                    }.getOrNull() ?: return@replace callOriginal()
-
-                    readAiSoundSetting(context, defaultValue = 1) == 1 && isAiSoundFeatureOpened()
-                }
+        replaceMethod(className, methodName, parameterCount = 1) {
+            val packageName = args.firstOrNull() as? String ?: return@replaceMethod callOriginal()
+            if (!isAiSoundSupportedPackage(packageName)) {
+                return@replaceMethod callOriginal()
             }
+
+            val context = runCatching {
+                ReflectCompat.getObjectField(instanceOrNull, "mContext") as? Context
+            }.getOrNull() ?: return@replaceMethod callOriginal()
+
+            readAiSoundSetting(context, defaultValue = 1) == 1 && isAiSoundFeatureOpened()
         }
     }
 
     private fun HookScope.hookSuperResolutionSupportMethod(className: String, methodName: String) {
-        findClass(className).hook {
-            injectMember {
-                method {
-                    name = methodName
-                    emptyParam()
-                }
-                replace {
-                    resolveRegisteredGamePackagesOrOriginal("$className#$methodName")
-                }
-            }
+        replaceMethod(className, methodName) {
+            resolveRegisteredGamePackagesOrOriginal("$className#$methodName")
         }
     }
 
@@ -1378,41 +1218,27 @@ class MainHook : XposedModule() {
     // -------------------------------------------------------------------------
 
     private fun HookScope.installLsrServiceManagerFallback() {
-        findClass("android.os.ServiceManager").hook {
-            injectMember {
-                method {
-                    name = "getService"
-                    param(String::class.java)
-                }
-                after {
-                    val svcName = args.firstOrNull()
-                    if (svcName == LsrService.LSR_SERVICE) {
-                        if (result == null) {
-                            val binder = getOrCreateFallbackLsrBinder()
-                            result = binder
-                            AndroidInternals.log("ServiceManager.getService(lenovosr) → fallback binder=$binder")
-                        } else {
-                            AndroidInternals.log("ServiceManager.getService(lenovosr) → original result=$result")
-                        }
-                    }
+        afterMethod("android.os.ServiceManager", "getService", String::class.java) {
+            val svcName = args.firstOrNull()
+            if (svcName == LsrService.LSR_SERVICE) {
+                if (result == null) {
+                    val binder = getOrCreateFallbackLsrBinder()
+                    result = binder
+                    AndroidInternals.log("ServiceManager.getService(lenovosr) → fallback binder=$binder")
+                } else {
+                    AndroidInternals.log("ServiceManager.getService(lenovosr) → original result=$result")
                 }
             }
-            injectMember {
-                method {
-                    name = "checkService"
-                    param(String::class.java)
-                }
-                after {
-                    val svcName = args.firstOrNull()
-                    if (svcName == LsrService.LSR_SERVICE) {
-                        if (result == null) {
-                            val binder = getOrCreateFallbackLsrBinder()
-                            result = binder
-                            AndroidInternals.log("ServiceManager.checkService(lenovosr) → fallback binder=$binder")
-                        } else {
-                            AndroidInternals.log("ServiceManager.checkService(lenovosr) → original result=$result")
-                        }
-                    }
+        }
+        afterMethod("android.os.ServiceManager", "checkService", String::class.java) {
+            val svcName = args.firstOrNull()
+            if (svcName == LsrService.LSR_SERVICE) {
+                if (result == null) {
+                    val binder = getOrCreateFallbackLsrBinder()
+                    result = binder
+                    AndroidInternals.log("ServiceManager.checkService(lenovosr) → fallback binder=$binder")
+                } else {
+                    AndroidInternals.log("ServiceManager.checkService(lenovosr) → original result=$result")
                 }
             }
         }
