@@ -230,11 +230,7 @@ object PackageManagerController {
         val listFile = File(context.cacheDir, "gpp_app_list.generated")
         val scriptFile = File(context.cacheDir, "apply_gpp_app_list.sh")
 
-        if (useOverlay) {
-            listFile.writeText(SupportedPackageList.buildFileContents(selectedPackages))
-        } else if (listFile.exists()) {
-            listFile.delete()
-        }
+        listFile.writeText(SupportedPackageList.buildFileContents(selectedPackages))
 
         scriptFile.writeText(buildRootScript(listFile.absolutePath, useOverlay, settingsValue))
         scriptFile.setExecutable(true)
@@ -261,9 +257,35 @@ object PackageManagerController {
             """.trimIndent()
         } else {
             """
-            rm -f '${SupportedPackageList.RUNTIME_LIST_PATH}' '${SupportedPackageList.MODULE_LIST_PATH}'
+            if [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ]; then
+              cat '${tempFilePath}' > '${SupportedPackageList.RUNTIME_LIST_PATH}'
+              chmod 0644 '${SupportedPackageList.RUNTIME_LIST_PATH}'
+            fi
+            if [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
+              cat '${tempFilePath}' > '${SupportedPackageList.MODULE_LIST_PATH}'
+              chmod 0644 '${SupportedPackageList.MODULE_LIST_PATH}'
+              chcon u:object_r:system_file:s0 '${SupportedPackageList.MODULE_LIST_PATH}' 2>/dev/null || true
+            fi
+            sync
             settings delete global '${SupportedPackageList.RUNTIME_SETTINGS_KEY}' >/dev/null 2>&1 || true
             """.trimIndent()
+        }
+
+        val activateList = if (useOverlay) {
+            """
+            |if [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
+            |  bind_active_list
+            |elif [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ]; then
+            |  bind_active_list
+            |else
+            |  unbind_active_list
+            |fi
+            """.trimMargin()
+        } else {
+            """
+            |unbind_active_list
+            |rm -f '${SupportedPackageList.RUNTIME_LIST_PATH}' '${SupportedPackageList.MODULE_LIST_PATH}'
+            """.trimMargin()
         }
 
         return """
@@ -297,13 +319,7 @@ object PackageManagerController {
             |  fi
             |}
             |
-            |if [ -f '${SupportedPackageList.MODULE_LIST_PATH}' ]; then
-            |  bind_active_list
-            |elif [ -f '${SupportedPackageList.RUNTIME_LIST_PATH}' ]; then
-            |  bind_active_list
-            |else
-            |  unbind_active_list
-            |fi
+            |$activateList
             |
             |kill_process_by_name() {
             |  PROCESS_NAME="${'$'}1"

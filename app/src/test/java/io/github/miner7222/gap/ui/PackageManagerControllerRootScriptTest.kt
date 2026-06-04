@@ -51,6 +51,24 @@ class PackageManagerControllerRootScriptTest {
         )
     }
 
+    @Test
+    fun restoreDefaultScriptRefreshesBackingFilesBeforeRemovingOverride() {
+        val script = buildRootScript(useOverlay = false)
+
+        val refreshRuntime = "cat '/data/local/tmp/gpp_app_list.generated' > '${SupportedPackageList.RUNTIME_LIST_PATH}'"
+        val refreshModule = "cat '/data/local/tmp/gpp_app_list.generated' > '${SupportedPackageList.MODULE_LIST_PATH}'"
+        val removeOverrides = "rm -f '${SupportedPackageList.RUNTIME_LIST_PATH}' '${SupportedPackageList.MODULE_LIST_PATH}'"
+        val unbindCall = "\nunbind_active_list\n"
+
+        assertTrue(script.contains(refreshRuntime))
+        assertTrue(script.contains(refreshModule))
+        assertTrue(script.contains(removeOverrides))
+        assertTrue(script.contains(unbindCall))
+        assertTrue(script.indexOf(refreshRuntime) < script.indexOf(removeOverrides))
+        assertTrue(script.indexOf(refreshModule) < script.indexOf(removeOverrides))
+        assertTrue(script.indexOf(unbindCall) < script.indexOf(removeOverrides))
+    }
+
     private fun buildRootScript(useOverlay: Boolean): String {
         val method = PackageManagerController::class.java.getDeclaredMethod(
             "buildRootScript",
