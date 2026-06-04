@@ -35,9 +35,14 @@ class MainHook : XposedModule() {
         isBaldurBoard = ::isBaldurBoard,
         shouldExposeSuperResolution = { packageName -> superResolutionRuntime.shouldExpose(packageName) },
     )
+    private val superResolutionStateRuntime = SuperResolutionStateRuntime(
+        useCompatibilityLsr = AndroidInternals::useCompatibilityLsr,
+        shouldExposeSuperResolution = superResolutionRuntime::shouldExpose,
+    )
     private val superResolutionHooks = SuperResolutionHooks(
         superResolutionRuntime = superResolutionRuntime,
         floatingBarRuntime = floatingBarRuntime,
+        superResolutionStateRuntime = superResolutionStateRuntime,
     )
     private val romFeatureRuntime = RomFeatureRuntime(
         resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
