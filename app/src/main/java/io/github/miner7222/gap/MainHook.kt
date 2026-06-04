@@ -2,13 +2,11 @@ package io.github.miner7222.gap
 
 import android.content.Context
 import android.content.res.Resources
-import android.os.IBinder
 import android.util.Log
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
-import com.zui.server.lsr.LsrService
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainHook : XposedModule() {
@@ -22,14 +20,11 @@ class MainHook : XposedModule() {
     private val systemHooksInstalled = AtomicBoolean(false)
     private val gameHooksInstalled = AtomicBoolean(false)
     @Volatile
-    private var systemContext: Context? = null
-    @Volatile
-    private var fallbackLsrBinder: IBinder? = null
-    @Volatile
     private var cachedGameHelperClassLoader: ClassLoader? = null
+    private val lsrRuntime = LsrRuntime()
     private val superResolutionRuntime = SuperResolutionRuntime(
-        resolveSystemContext = ::resolveSystemContext,
-        resolveProcessApplicationContext = ::resolveProcessApplicationContext,
+        resolveSystemContext = lsrRuntime::resolveSystemContext,
+        resolveProcessApplicationContext = lsrRuntime::resolveProcessApplicationContext,
     )
     private val aiSoundRuntime = AiSoundRuntime(
         resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
@@ -83,13 +78,13 @@ class MainHook : XposedModule() {
             // Register the compatibility Binder service early in system_server
             // so Game Helper can bind to lenovosr on non-Baldur devices.
             afterMethod("com.android.server.SystemServer", "startBootstrapServices", parameterCount = 1) {
-                ensureLsrRegistered()
+                lsrRuntime.ensureRegistered(instanceOrNull)
             }
             afterMethod("com.android.server.SystemServer", "startCoreServices", parameterCount = 1) {
-                ensureLsrRegistered()
+                lsrRuntime.ensureRegistered(instanceOrNull)
             }
             afterMethod("com.android.server.SystemServer", "startOtherServices", parameterCount = 1) {
-                ensureLsrRegistered()
+                lsrRuntime.ensureRegistered(instanceOrNull)
             }
         } else {
             AndroidInternals.log("Skipping compatibility lenovosr bootstrap hooks")
@@ -436,7 +431,7 @@ class MainHook : XposedModule() {
 
     private fun resolveGameHelperClassLoader(): ClassLoader? {
         return cachedGameHelperClassLoader
-            ?: resolveProcessApplicationContext()?.javaClass?.classLoader
+            ?: lsrRuntime.resolveProcessApplicationContext()?.javaClass?.classLoader
     }
 
     private fun hasMethodWithParamCount(
@@ -447,55 +442,13 @@ class MainHook : XposedModule() {
     ): Boolean {
         return runCatching {
             val resolvedClassLoader = classLoader
-                ?: resolveProcessApplicationContext()?.javaClass?.classLoader
+                ?: lsrRuntime.resolveProcessApplicationContext()?.javaClass?.classLoader
                 ?: Thread.currentThread().contextClassLoader
 
             ReflectCompat.findClass(className, resolvedClassLoader).declaredMethods.any {
                 it.name == methodName && it.parameterTypes.size == paramCount
             }
         }.getOrDefault(false)
-    }
-
-    private fun resolveProcessApplicationContext(): Context? {
-        return runCatching {
-            ReflectCompat.callStaticMethod(
-                ReflectCompat.findClass("android.app.ActivityThread", null),
-                "currentApplication",
-            ) as? Context
-        }.getOrElse {
-            AndroidInternals.log("Failed to resolve process application context", it)
-            null
-        }
-    }
-
-    private fun resolveSystemContext(instance: Any? = null): Context? {
-        (instance?.let {
-            runCatching { ReflectCompat.getObjectField(it, "mContext") as? Context }.getOrNull()
-        } ?: systemContext)?.let { context ->
-            rememberSystemContext(context)
-            return context
-        }
-        return resolveProcessApplicationContext()?.also(::rememberSystemContext)
-    }
-
-    private fun rememberSystemContext(context: Context) {
-        if (systemContext == null) {
-            systemContext = context.applicationContext ?: context
-        }
-    }
-
-    private fun HookCall.ensureLsrRegistered() {
-        if (!AndroidInternals.useCompatibilityLsr()) {
-            return
-        }
-        runCatching {
-            val systemServer = instance<Any>()
-            val context = ReflectCompat.getObjectField(systemServer, "mSystemContext") as? Context ?: return
-            rememberSystemContext(context)
-            LsrServiceRegistry.ensureRegistered(context)
-        }.onFailure {
-            AndroidInternals.log("Failed to register lenovosr from modern Xposed hook", it)
-        }
     }
 
     // -------------------------------------------------------------------------
@@ -505,50 +458,10 @@ class MainHook : XposedModule() {
 
     private fun HookScope.installLsrServiceManagerFallback() {
         afterMethod("android.os.ServiceManager", "getService", String::class.java) {
-            val svcName = args.firstOrNull()
-            if (svcName == LsrService.LSR_SERVICE) {
-                if (result == null) {
-                    val binder = getOrCreateFallbackLsrBinder()
-                    result = binder
-                    AndroidInternals.log("ServiceManager.getService(lenovosr) → fallback binder=$binder")
-                } else {
-                    AndroidInternals.log("ServiceManager.getService(lenovosr) → original result=$result")
-                }
-            }
+            result = lsrRuntime.resolveServiceManagerResult("getService", args.firstOrNull(), result)
         }
         afterMethod("android.os.ServiceManager", "checkService", String::class.java) {
-            val svcName = args.firstOrNull()
-            if (svcName == LsrService.LSR_SERVICE) {
-                if (result == null) {
-                    val binder = getOrCreateFallbackLsrBinder()
-                    result = binder
-                    AndroidInternals.log("ServiceManager.checkService(lenovosr) → fallback binder=$binder")
-                } else {
-                    AndroidInternals.log("ServiceManager.checkService(lenovosr) → original result=$result")
-                }
-            }
-        }
-    }
-
-    private fun getOrCreateFallbackLsrBinder(): IBinder? {
-        if (!AndroidInternals.useCompatibilityLsr()) {
-            return null
-        }
-        // In system_server the binder that failed to register is retained by
-        // LsrServiceRegistry.
-        LsrServiceRegistry.getFallbackBinder()?.let { return it }
-
-        // In client processes, construct a local in-process service instead.
-        fallbackLsrBinder?.let { return it }
-        synchronized(this) {
-            fallbackLsrBinder?.let { return it }
-            val context = resolveProcessApplicationContext() ?: return null
-            val service = LsrService(context)
-            service.onStartLocal()
-            val binder: IBinder = LsrService.BinderService(service)
-            fallbackLsrBinder = binder
-            AndroidInternals.log("Created fallback local LsrService binder")
-            return binder
+            result = lsrRuntime.resolveServiceManagerResult("checkService", args.firstOrNull(), result)
         }
     }
 }
