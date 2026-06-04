@@ -1,7 +1,6 @@
 package io.github.miner7222.gap
 
 import android.content.Context
-import android.content.res.Resources
 import android.util.Log
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
@@ -14,7 +13,6 @@ class MainHook : XposedModule() {
     private companion object {
         private const val TAG = "GAP"
         private const val GAME_HELPER_PACKAGE = "com.zui.game.service"
-        private const val GAME_RESOLUTION_APPS_ARRAY = "game_resolution_apps"
     }
 
     private val systemHooksInstalled = AtomicBoolean(false)
@@ -36,6 +34,10 @@ class MainHook : XposedModule() {
         resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
         isBaldurBoard = ::isBaldurBoard,
         shouldExposeSuperResolution = { packageName -> superResolutionRuntime.shouldExpose(packageName) },
+    )
+    private val superResolutionHooks = SuperResolutionHooks(
+        superResolutionRuntime = superResolutionRuntime,
+        floatingBarRuntime = floatingBarRuntime,
     )
     private val romFeatureRuntime = RomFeatureRuntime(
         resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
@@ -120,9 +122,7 @@ class MainHook : XposedModule() {
         installGameSettingFeatureHooks()
         // Keep SR device support enabled while swapping the stock
         // whitelist inputs to the active gpp_app_list view.
-        installSuperResolutionAvailabilityHooks()
-        // Replace the stock SR whitelist lookups with the active gpp_app_list view.
-        installSuperResolutionSupportHooks()
+        superResolutionHooks.install(this)
         // Normalize AI sound package gating so both PUBG package names work
         // regardless of the device's ROW region flag.
         installAiSoundEnhancementHooks()
@@ -221,82 +221,6 @@ class MainHook : XposedModule() {
         ) {
             if (isBaldurBoard()) callOriginal() else false
         }
-    }
-
-    private fun HookScope.installSuperResolutionAvailabilityHooks() {
-        replaceMethodWithTrue("com.zui.game.service.di.Settings", "getSupportSuperResolution")
-
-        installSuperResolutionResourceHooks()
-
-        // Backstop the rendered list so stale SR buttons cannot survive after
-        // the runtime whitelist changes.
-        afterMethod(
-            "com.zui.game.service.ui.GameHelperViewController\$getCurrentView\$1\$1",
-            "emit",
-            parameterCount = 2,
-        ) {
-            val controller = runCatching {
-                ReflectCompat.getObjectField(instanceOrNull, "this\$0")
-            }.getOrNull()
-            floatingBarRuntime.normalizeItems(controller, "getCurrentView collector")
-            // If the LiveData was empty (list not populated yet), schedule a
-            // retry after the current message finishes so the original code
-            // has a chance to fill the list first.
-            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                floatingBarRuntime.normalizeItems(controller, "getCurrentView collector (deferred)")
-            }
-        }
-    }
-
-    private fun HookScope.installSuperResolutionResourceHooks() {
-        replaceMethod("android.content.res.Resources", "getStringArray", Int::class.javaPrimitiveType!!) {
-            val resources = instanceOrNull as? Resources ?: return@replaceMethod callOriginal()
-            val resId = args.firstOrNull() as? Int ?: return@replaceMethod callOriginal()
-            val entryName = runCatching { resources.getResourceEntryName(resId) }.getOrNull()
-            val packageName = runCatching { resources.getResourcePackageName(resId) }.getOrNull()
-
-            if (entryName != GAME_RESOLUTION_APPS_ARRAY || packageName != GAME_HELPER_PACKAGE) {
-                return@replaceMethod callOriginal()
-            }
-
-            val originalEntries = runCatching {
-                (callOriginal() as? Array<*>)
-                    ?.mapNotNull { it as? String }
-                    ?.toTypedArray()
-            }.getOrElse {
-                AndroidInternals.log("Failed to read stock $GAME_RESOLUTION_APPS_ARRAY entries", it)
-                null
-            } ?: return@replaceMethod emptyArray<String>()
-
-            val overriddenEntries = superResolutionRuntime.resolveArrayEntries(originalEntries)
-            if (overriddenEntries != null) {
-                AndroidInternals.log(
-                    "Replaced $GAME_RESOLUTION_APPS_ARRAY with ${overriddenEntries.size} runtime entries",
-                )
-                overriddenEntries
-            } else {
-                originalEntries
-            }
-        }
-    }
-
-    private fun HookScope.installSuperResolutionSupportHooks() {
-        hookSuperResolutionSupportMethod(
-            "com.zui.ugame.gamesetting.data.RepositoryImpl",
-            "querySuperResolutionSupportPackage",
-        )
-        hookSuperResolutionSupportMethod(
-            "com.zui.ugame.gamesetting.data.source.PreDownloadSourceImpl",
-            "querySuperResolutionSupportPackage",
-        )
-        hookSuperResolutionSupportMethod(
-            "com.zui.game.service.util.ConstValueKt",
-            "getSuperResolutionSupportPackages",
-        )
-        hookSuperResolutionSupportMethod(
-            "com.zui.game.service.util.ConstValueKt",
-            "getSuperResolutionSupportPackagesForAll",
-        )
     }
 
     private fun HookScope.installAiSoundEnhancementHooks() {
@@ -414,14 +338,6 @@ class MainHook : XposedModule() {
             }.getOrNull() ?: return@replaceMethod callOriginal()
 
             aiSoundRuntime.readSetting(context, defaultValue = 1) == 1 && aiSoundRuntime.isFeatureOpened()
-        }
-    }
-
-    private fun HookScope.hookSuperResolutionSupportMethod(className: String, methodName: String) {
-        replaceMethod(className, methodName) {
-            superResolutionRuntime.resolveRegisteredPackagesOrOriginal("$className#$methodName") {
-                callOriginal()
-            }
         }
     }
 
