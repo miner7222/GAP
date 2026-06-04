@@ -2,9 +2,7 @@ package io.github.miner7222.gap
 
 import android.content.Context
 import android.content.res.Resources
-import android.media.AudioManager
 import android.os.IBinder
-import android.provider.Settings
 import android.util.Log
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
@@ -24,22 +22,10 @@ class MainHook : XposedModule() {
         private const val FOUR_D_VIBRATE_FEATURE_KEY = "key_4d_vibrate"
         private const val WIDE_VISION_FEATURE_KEY = "key_wide_vision"
         private const val LIVE_PICTURE_FEATURE_KEY = "key_live_picture"
-        private const val AI_SOUND_SETTING_KEY = "key_game_aisound"
-        private const val AI_SOUND_PARAMETER_ENABLED = "aisound=true"
-        private const val AI_SOUND_PARAMETER_DISABLED = "aisound=false"
         private const val COLORFUL_LIGHT_FEATURE_KEY = "key_colorful_light"
         private const val GAME_RESOLUTION_APPS_ARRAY = "game_resolution_apps"
         private const val GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY = "option_item_colorful_light"
         private const val PUBG_VIBRATION_SHARED_KEY = "game.pubg.mobile"
-        private val PUBG_VARIANT_PACKAGES = linkedSetOf(
-            "com.tencent.ig",
-            "com.tencent.tmgp.pubgmhd",
-            "com.rekoo.pubgm",
-            "com.pubg.krmobile",
-            "com.vng.pubgmobile",
-            "com.pubg.imobile",
-        )
-        private val AI_SOUND_SUPPORTED_PACKAGES = LinkedHashSet(PUBG_VARIANT_PACKAGES)
     }
 
     private val systemHooksInstalled = AtomicBoolean(false)
@@ -53,6 +39,9 @@ class MainHook : XposedModule() {
     private val superResolutionRuntime = SuperResolutionRuntime(
         resolveSystemContext = ::resolveSystemContext,
         resolveProcessApplicationContext = ::resolveProcessApplicationContext,
+    )
+    private val aiSoundRuntime = AiSoundRuntime(
+        resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
     )
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
@@ -385,10 +374,10 @@ class MainHook : XposedModule() {
         afterMethod(className, methodName, parameterCount = 2) {
             val context = args.firstOrNull() as? Context ?: return@afterMethod
             val packageName = args.getOrNull(1) as? String ?: return@afterMethod
-            if (!isAiSoundSupportedPackage(packageName)) return@afterMethod
+            if (!aiSoundRuntime.isSupportedPackage(packageName)) return@afterMethod
 
-            val enabled = readAiSoundSetting(context, defaultValue = 1) == 1
-            applyAiSoundState(instanceOrNull, context, enabled)
+            val enabled = aiSoundRuntime.readSetting(context, defaultValue = 1) == 1
+            aiSoundRuntime.applyState(instanceOrNull, context, enabled)
             result = if (enabled) 0 else 1
         }
     }
@@ -401,23 +390,23 @@ class MainHook : XposedModule() {
         }
 
         replaceMethod(className, "onNoClick") {
-            val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
+            val packageName = aiSoundRuntime.resolveCallbackPackage(instanceOrNull)
                 ?: return@replaceMethod callOriginal()
-            if (!isAiSoundSupportedPackage(packageName)) {
+            if (!aiSoundRuntime.isSupportedPackage(packageName)) {
                 return@replaceMethod callOriginal()
             }
 
-            val context = resolveAiSoundCallbackContext(instanceOrNull)
+            val context = aiSoundRuntime.resolveCallbackContext(instanceOrNull)
                 ?: return@replaceMethod callOriginal()
-            val item = resolveAiSoundCallbackItem(instanceOrNull)
+            val item = aiSoundRuntime.resolveCallbackItem(instanceOrNull)
                 ?: return@replaceMethod callOriginal()
-            toggleAiSound(item, context)
+            aiSoundRuntime.toggle(item, context)
             null
         }
 
         replaceMethod(className, "onToast") {
-            val packageName = resolveAiSoundCallbackPackage(instanceOrNull)
-            if (packageName != null && isAiSoundSupportedPackage(packageName)) {
+            val packageName = aiSoundRuntime.resolveCallbackPackage(instanceOrNull)
+            if (packageName != null && aiSoundRuntime.isSupportedPackage(packageName)) {
                 return@replaceMethod null
             }
             callOriginal()
@@ -434,7 +423,7 @@ class MainHook : XposedModule() {
 
         replaceMethod(className, methodName, parameterCount = 1) {
             val packageName = args.firstOrNull() as? String ?: return@replaceMethod callOriginal()
-            if (!isAiSoundSupportedPackage(packageName)) {
+            if (!aiSoundRuntime.isSupportedPackage(packageName)) {
                 return@replaceMethod callOriginal()
             }
 
@@ -442,7 +431,7 @@ class MainHook : XposedModule() {
                 ReflectCompat.getObjectField(instanceOrNull, "mContext") as? Context
             }.getOrNull() ?: return@replaceMethod callOriginal()
 
-            readAiSoundSetting(context, defaultValue = 1) == 1 && isAiSoundFeatureOpened()
+            aiSoundRuntime.readSetting(context, defaultValue = 1) == 1 && aiSoundRuntime.isFeatureOpened()
         }
     }
 
@@ -452,143 +441,6 @@ class MainHook : XposedModule() {
                 callOriginal()
             }
         }
-    }
-
-    private fun isAiSoundSupportedPackage(packageName: String?): Boolean {
-        return packageName != null && packageName in AI_SOUND_SUPPORTED_PACKAGES
-    }
-
-    private fun resolveAiSoundCallbackPackage(callback: Any?): String? {
-        return runCatching {
-            ReflectCompat.getObjectField(callback, "\$pkg") as? String
-        }.getOrNull()
-    }
-
-    private fun resolveAiSoundCallbackContext(callback: Any?): Context? {
-        return runCatching {
-            ReflectCompat.getObjectField(callback, "\$context") as? Context
-        }.getOrNull()
-    }
-
-    private fun resolveAiSoundCallbackItem(callback: Any?): Any? {
-        return runCatching {
-            ReflectCompat.getObjectField(callback, "this\$0")
-        }.getOrNull()
-    }
-
-    private fun readAiSoundSetting(context: Context, defaultValue: Int): Int {
-        val classLoader = resolveGameHelperClassLoader() ?: context.classLoader
-
-        return runCatching {
-            val utilClass = ReflectCompat.findClass("com.zui.util.SettingsValueUtilKt", classLoader)
-            ReflectCompat.callStaticMethod(
-                utilClass,
-                "getSystemInt",
-                AI_SOUND_SETTING_KEY,
-                context,
-                defaultValue,
-            ) as? Int
-        }.getOrNull() ?: runCatching {
-            Settings.System.getInt(context.contentResolver, AI_SOUND_SETTING_KEY, defaultValue)
-        }.getOrElse {
-            AndroidInternals.log("Failed to read AI sound setting", it)
-            defaultValue
-        }
-    }
-
-    private fun writeAiSoundSetting(context: Context, value: Int) {
-        val classLoader = resolveGameHelperClassLoader() ?: context.classLoader
-        val stored = runCatching {
-            val utilClass = ReflectCompat.findClass("com.zui.util.SettingsValueUtilKt", classLoader)
-            ReflectCompat.callStaticMethod(
-                utilClass,
-                "setSystemInt",
-                AI_SOUND_SETTING_KEY,
-                context,
-                value,
-            )
-            true
-        }.getOrElse {
-            AndroidInternals.log("Falling back to Settings.System for AI sound state", it)
-            false
-        }
-
-        if (!stored) {
-            runCatching {
-                Settings.System.putInt(context.contentResolver, AI_SOUND_SETTING_KEY, value)
-            }.onFailure {
-                AndroidInternals.log("Failed to write AI sound setting", it)
-            }
-        }
-    }
-
-    private fun isAiSoundFeatureOpened(): Boolean {
-        val classLoader = resolveGameHelperClassLoader() ?: return false
-
-        return runCatching {
-            val itemClass = ReflectCompat.findClass(
-                "com.zui.game.service.sys.item.ItemAISoundEnhancement",
-                classLoader,
-            )
-            val featuresClass = ReflectCompat.findClass(
-                "com.zui.game.service.FeaturesBaseOnRomKt",
-                classLoader,
-            )
-            val companion = ReflectCompat.getStaticObjectField(itemClass, "Companion")
-            val romFeatures = ReflectCompat.callStaticMethod(featuresClass, "getRomFeatures")
-            ReflectCompat.callMethod(companion, "isFeatureOpened", romFeatures) as? Boolean ?: false
-        }.getOrElse {
-            AndroidInternals.log("Failed to evaluate AI sound feature availability", it)
-            false
-        }
-    }
-
-    private fun applyAiSoundState(item: Any?, context: Context, enabled: Boolean) {
-        if (item == null) return
-
-        val status = if (enabled) 0 else 1
-        runCatching {
-            ReflectCompat.callMethod(item, "setMStatus", status)
-            ReflectCompat.callMethod(item, "setMNoClick", true)
-            val liveData = ReflectCompat.callMethod(item, "getMStatusLive")
-            ReflectCompat.callMethod(liveData, "postValue", status)
-        }.onFailure {
-            AndroidInternals.log("Failed to apply AI sound item state", it)
-        }
-
-        runCatching {
-            (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.setParameters(
-                if (enabled) AI_SOUND_PARAMETER_ENABLED else AI_SOUND_PARAMETER_DISABLED,
-            )
-        }.onFailure {
-            AndroidInternals.log("Failed to update AI sound audio parameters", it)
-        }
-    }
-
-    private fun toggleAiSound(item: Any, context: Context) {
-        val enable = runCatching {
-            (ReflectCompat.callMethod(item, "getMStatus") as? Int) != 0
-        }.getOrElse {
-            AndroidInternals.log("Failed to read current AI sound toggle state", it)
-            true
-        }
-
-        runCatching {
-            ReflectCompat.callMethod(item, "change2Status", if (enable) 0 else 1)
-        }.onFailure {
-            AndroidInternals.log("Failed to toggle AI sound state through change2Status()", it)
-            applyAiSoundState(item, context, enable)
-        }
-
-        runCatching {
-            (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.setParameters(
-                if (enable) AI_SOUND_PARAMETER_ENABLED else AI_SOUND_PARAMETER_DISABLED,
-            )
-        }.onFailure {
-            AndroidInternals.log("Failed to update AI sound audio parameters during toggle", it)
-        }
-
-        writeAiSoundSetting(context, if (enable) 1 else 0)
     }
 
     private fun mergeWideVisionKnownGames(viewModel: Any?) {
@@ -617,7 +469,7 @@ class MainHook : XposedModule() {
 
         val normalizedPackage = packageName?.takeIf { it.isNotBlank() } ?: return merged.toList()
         resolveVibrationResourceMatches(context, normalizedPackage).forEach { merged += it }
-        if (normalizedPackage in PUBG_VARIANT_PACKAGES) {
+        if (normalizedPackage in GamePackageGroups.PUBG_VARIANT_PACKAGES) {
             merged += PUBG_VIBRATION_SHARED_KEY
         }
 
