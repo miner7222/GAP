@@ -345,9 +345,26 @@ object PackageManagerController {
             |  sleep 1
             |}
             |
+            |clear_gpp_frame_interpolation() {
+            |  setprop vendor.gpp.frc.enable 0x21
+            |  setprop vendor.gpp.gfrc.upscale.ratio 0
+            |  setprop vendor.gpp.gfrc.interp.rate 0
+            |  setprop vendor.gpp.frc.interp.factor 0
+            |  setprop vendor.gpp.frc.upscale.ratio 0
+            |}
+            |
+            |restart_compat_vppservice() {
+            |  stop vendor.vppservice 2>/dev/null || setprop ctl.stop vendor.vppservice 2>/dev/null || true
+            |  sleep 1
+            |  kill_process_by_name vppservice
+            |  start vendor.vppservice 2>/dev/null || setprop ctl.start vendor.vppservice 2>/dev/null || true
+            |  sleep 1
+            |}
+            |
             |restart_compat_gppservice() {
+            |  clear_gpp_frame_interpolation
             |  kill_process_by_name gppservice
-            |  start vendor.vppservice 2>/dev/null || true
+            |  restart_compat_vppservice
             |  chcon u:object_r:vendor_gppservice_exec:s0 /system/bin/gppservice 2>/dev/null || true
             |  setprop vendor.gpp.create_frc_extension 1
             |  runcon u:r:vendor_gppservice:s0 /system/bin/gppservice >/dev/null 2>&1 &

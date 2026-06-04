@@ -52,6 +52,31 @@ class PackageManagerControllerRootScriptTest {
     }
 
     @Test
+    fun saveScriptHardResetsCompatFrameInterpolationBeforeRestartingGppService() {
+        val script = buildRootScript(useOverlay = true)
+
+        val clearFrameInterpolation = "  clear_gpp_frame_interpolation\n"
+        val stopVppService = "stop vendor.vppservice"
+        val killVppService = "kill_process_by_name vppservice"
+        val startVppService = "start vendor.vppservice"
+        val restartVppService = "  restart_compat_vppservice\n"
+        val startGppService = "runcon u:r:vendor_gppservice:s0 /system/bin/gppservice"
+
+        assertTrue(script.contains("setprop vendor.gpp.frc.enable 0x21"))
+        assertTrue(script.contains("setprop vendor.gpp.gfrc.upscale.ratio 0"))
+        assertTrue(script.contains("setprop vendor.gpp.gfrc.interp.rate 0"))
+        assertTrue(script.contains("setprop vendor.gpp.frc.interp.factor 0"))
+        assertTrue(script.contains("setprop vendor.gpp.frc.upscale.ratio 0"))
+        assertTrue(script.contains(stopVppService))
+        assertTrue(script.contains(killVppService))
+        assertTrue(script.contains(startVppService))
+        assertTrue(script.indexOf(clearFrameInterpolation) < script.indexOf(restartVppService))
+        assertTrue(script.indexOf(stopVppService) < script.indexOf(killVppService))
+        assertTrue(script.indexOf(killVppService) < script.indexOf(startVppService))
+        assertTrue(script.indexOf(restartVppService) < script.indexOf(startGppService))
+    }
+
+    @Test
     fun restoreDefaultScriptRefreshesBackingFilesBeforeRemovingOverride() {
         val script = buildRootScript(useOverlay = false)
 
