@@ -1,6 +1,5 @@
 package io.github.miner7222.gap
 
-import android.content.Context
 import android.util.Log
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
@@ -51,6 +50,12 @@ class MainHook : XposedModule() {
     private val romFeatureHooks = RomFeatureHooks(
         romFeatureRuntime = romFeatureRuntime,
         isBaldurBoard = ::isBaldurBoard,
+    )
+    private val aiSoundHooks = AiSoundHooks(
+        aiSoundRuntime = aiSoundRuntime,
+    )
+    private val gameEnhancementHooks = GameEnhancementHooks(
+        gameEnhancementRuntime = gameEnhancementRuntime,
     )
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
@@ -132,131 +137,12 @@ class MainHook : XposedModule() {
         superResolutionHooks.install(this)
         // Normalize AI sound package gating so both PUBG package names work
         // regardless of the device's ROW region flag.
-        installAiSoundEnhancementHooks()
+        aiSoundHooks.install(this)
         // Wide Vision and 4D vibration still keep separate regional lists in
         // stock Game Helper, so merge them at runtime.
-        installWideVisionHooks()
-        installVibrationSupportHooks()
+        gameEnhancementHooks.install(this)
 
         AndroidInternals.log("Installed modern Xposed game helper hooks")
-    }
-
-    private fun HookScope.installAiSoundEnhancementHooks() {
-        hookAiSoundItemInitialization()
-        hookAiSoundToggleHandler()
-        hookAiSoundFloatingNotice()
-    }
-
-    private fun HookScope.installWideVisionHooks() {
-        val className = "com.zui.ugame.gamesetting.ui.options.content.widevision.MoreGameViewModel"
-        val methodName = "<init>"
-        if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
-            AndroidInternals.log("Skip missing $className#$methodName/2 in Game Helper")
-            return
-        }
-
-        afterMethod(className, methodName, parameterCount = 2) {
-            gameEnhancementRuntime.mergeWideVisionKnownGames(instanceOrNull)
-        }
-    }
-
-    private fun HookScope.installVibrationSupportHooks() {
-        val className = "com.zui.game.service.vibrate.VibrationToolKt"
-        val methodName = "isGameSupport4dVibration"
-        if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
-            AndroidInternals.log("Skip missing $className#$methodName/2 in Game Helper")
-            return
-        }
-
-        replaceMethod(className, methodName, parameterCount = 2) {
-            val context = args.firstOrNull() as? Context
-            val packageName = args.getOrNull(1) as? String
-            val original = runCatching {
-                @Suppress("UNCHECKED_CAST")
-                (callOriginal() as? List<Any?>) ?: emptyList()
-            }.getOrElse {
-                AndroidInternals.log("Failed to call original $className#$methodName", it)
-                emptyList()
-            }
-
-            if (context == null) {
-                return@replaceMethod original.mapNotNull { it as? String }
-            }
-
-            gameEnhancementRuntime.mergeVibrationSupportKeys(context, packageName, original)
-        }
-    }
-
-    private fun HookScope.hookAiSoundItemInitialization() {
-        val className = "com.zui.game.service.sys.item.ItemAISoundEnhancement"
-        val methodName = "initFromSavedState"
-        if (!hasMethodWithParamCount(className, methodName, 2, appClassLoader)) {
-            AndroidInternals.log("Skip missing $className#$methodName/2 in Game Helper")
-            return
-        }
-
-        afterMethod(className, methodName, parameterCount = 2) {
-            val context = args.firstOrNull() as? Context ?: return@afterMethod
-            val packageName = args.getOrNull(1) as? String ?: return@afterMethod
-            if (!aiSoundRuntime.isSupportedPackage(packageName)) return@afterMethod
-
-            val enabled = aiSoundRuntime.readSetting(context, defaultValue = 1) == 1
-            aiSoundRuntime.applyState(instanceOrNull, context, enabled)
-            result = if (enabled) 0 else 1
-        }
-    }
-
-    private fun HookScope.hookAiSoundToggleHandler() {
-        val className = "com.zui.game.service.sys.item.ItemAISoundEnhancement\$initFromSavedState\$1"
-        if (!hasMethodWithParamCount(className, "onNoClick", 0, appClassLoader)) {
-            AndroidInternals.log("Skip missing $className#onNoClick/0 in Game Helper")
-            return
-        }
-
-        replaceMethod(className, "onNoClick") {
-            val packageName = aiSoundRuntime.resolveCallbackPackage(instanceOrNull)
-                ?: return@replaceMethod callOriginal()
-            if (!aiSoundRuntime.isSupportedPackage(packageName)) {
-                return@replaceMethod callOriginal()
-            }
-
-            val context = aiSoundRuntime.resolveCallbackContext(instanceOrNull)
-                ?: return@replaceMethod callOriginal()
-            val item = aiSoundRuntime.resolveCallbackItem(instanceOrNull)
-                ?: return@replaceMethod callOriginal()
-            aiSoundRuntime.toggle(item, context)
-            null
-        }
-
-        replaceMethod(className, "onToast") {
-            val packageName = aiSoundRuntime.resolveCallbackPackage(instanceOrNull)
-            if (packageName != null && aiSoundRuntime.isSupportedPackage(packageName)) {
-                return@replaceMethod null
-            }
-            callOriginal()
-        }
-    }
-
-    private fun HookScope.hookAiSoundFloatingNotice() {
-        val className = "com.zui.game.service.ui.FloatingGameNoticController"
-        val methodName = "checkAISoundEnhancementEnable"
-        if (!hasMethodWithParamCount(className, methodName, 1, appClassLoader)) {
-            AndroidInternals.log("Skip missing $className#$methodName/1 in Game Helper")
-            return
-        }
-
-        replaceMethod(className, methodName, parameterCount = 1) {
-            val packageName = args.firstOrNull() as? String ?: return@replaceMethod callOriginal()
-            if (!aiSoundRuntime.isSupportedPackage(packageName)) {
-                return@replaceMethod callOriginal()
-            }
-
-            val context = runCatching {
-                ReflectCompat.getObjectField(instanceOrNull, "mContext") as? Context
-            }.getOrNull() ?: return@replaceMethod callOriginal()
-
-            aiSoundRuntime.readSetting(context, defaultValue = 1) == 1 && aiSoundRuntime.isFeatureOpened()
-        }
     }
 
     private fun isBaldurBoard(): Boolean {
@@ -266,23 +152,6 @@ class MainHook : XposedModule() {
     private fun resolveGameHelperClassLoader(): ClassLoader? {
         return cachedGameHelperClassLoader
             ?: lsrRuntime.resolveProcessApplicationContext()?.javaClass?.classLoader
-    }
-
-    private fun hasMethodWithParamCount(
-        className: String,
-        methodName: String,
-        paramCount: Int,
-        classLoader: ClassLoader?,
-    ): Boolean {
-        return runCatching {
-            val resolvedClassLoader = classLoader
-                ?: lsrRuntime.resolveProcessApplicationContext()?.javaClass?.classLoader
-                ?: Thread.currentThread().contextClassLoader
-
-            ReflectCompat.findClass(className, resolvedClassLoader).declaredMethods.any {
-                it.name == methodName && it.parameterTypes.size == paramCount
-            }
-        }.getOrDefault(false)
     }
 
     // -------------------------------------------------------------------------
