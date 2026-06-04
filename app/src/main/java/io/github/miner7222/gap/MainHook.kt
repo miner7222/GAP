@@ -9,8 +9,6 @@ import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 import com.zui.server.lsr.LsrService
-import java.lang.reflect.Modifier
-import java.util.LinkedHashSet
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainHook : XposedModule() {
@@ -18,13 +16,7 @@ class MainHook : XposedModule() {
     private companion object {
         private const val TAG = "GAP"
         private const val GAME_HELPER_PACKAGE = "com.zui.game.service"
-        private const val SUPER_RESOLUTION_FEATURE_KEY = "key_super_resolution"
-        private const val FOUR_D_VIBRATE_FEATURE_KEY = "key_4d_vibrate"
-        private const val WIDE_VISION_FEATURE_KEY = "key_wide_vision"
-        private const val LIVE_PICTURE_FEATURE_KEY = "key_live_picture"
-        private const val COLORFUL_LIGHT_FEATURE_KEY = "key_colorful_light"
         private const val GAME_RESOLUTION_APPS_ARRAY = "game_resolution_apps"
-        private const val GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY = "option_item_colorful_light"
     }
 
     private val systemHooksInstalled = AtomicBoolean(false)
@@ -49,6 +41,10 @@ class MainHook : XposedModule() {
         resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
         isBaldurBoard = ::isBaldurBoard,
         shouldExposeSuperResolution = { packageName -> superResolutionRuntime.shouldExpose(packageName) },
+    )
+    private val romFeatureRuntime = RomFeatureRuntime(
+        resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
+        isBaldurBoard = ::isBaldurBoard,
     )
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
@@ -145,20 +141,14 @@ class MainHook : XposedModule() {
 
     private fun HookScope.installRomFeatureHooks() {
         replaceMethod("com.zui.game.service.RomFeatures", "isFeatureOpen", String::class.java) {
-            when (args.firstOrNull() as? String) {
-                SUPER_RESOLUTION_FEATURE_KEY -> true
-                FOUR_D_VIBRATE_FEATURE_KEY -> true
-                COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
-                else -> callOriginal()
+            romFeatureRuntime.resolveFeatureOpen(args.firstOrNull() as? String) {
+                callOriginal()
             }
         }
 
         afterMethod("com.zui.game.service.RomFeatures", "getKeyList") {
-            patchRomFeatureKeyList(instanceOrNull)
-            result = runCatching {
-                @Suppress("UNCHECKED_CAST")
-                ReflectCompat.getObjectField(instanceOrNull, "keyList") as? List<Any?>
-            }.getOrNull() ?: result
+            romFeatureRuntime.patchRomFeatureKeyList(instanceOrNull)
+            result = romFeatureRuntime.readRomFeatureKeyList(instanceOrNull) ?: result
         }
 
         replaceMethod(
@@ -166,11 +156,8 @@ class MainHook : XposedModule() {
             "isFeatureOpened",
             parameterCount = 1,
         ) {
-            when (resolveKeyContainerFeatureKey(instanceOrNull)) {
-                SUPER_RESOLUTION_FEATURE_KEY -> true
-                FOUR_D_VIBRATE_FEATURE_KEY -> true
-                COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
-                else -> callOriginal()
+            romFeatureRuntime.resolveKeyContainerFeatureOpen(instanceOrNull) {
+                callOriginal()
             }
         }
 
@@ -180,14 +167,14 @@ class MainHook : XposedModule() {
             Array<String>::class.java,
         ) {
             val keys = (args.firstOrNull() as? Array<*>)?.mapNotNull { it as? String } ?: return@beforeMethod
-            val normalized = normalizeFeatureKeys(keys)
+            val normalized = romFeatureRuntime.normalizeFeatureKeys(keys)
             if (keys.size != normalized.size || keys.toList() != normalized.toList()) {
                 AndroidInternals.log("Normalized FeatureKey list from ${keys.size} to ${normalized.size}")
             }
             args[0] = normalized
         }
 
-        patchExistingRomFeatureSets()
+        romFeatureRuntime.patchExistingRomFeatureSets()
     }
 
     private fun HookScope.installGameSettingFeatureHooks() {
@@ -196,14 +183,7 @@ class MainHook : XposedModule() {
                 @Suppress("UNCHECKED_CAST")
                 callOriginal() as? List<Any?>
             }.getOrNull() ?: emptyList()
-
-            if (isBaldurBoard()) {
-                original
-            } else {
-                original.filterNot {
-                    it?.javaClass?.name == "com.zui.ugame.gamesetting.feature.FEATURE_COLORFUL_LIGHT"
-                }
-            }
+            romFeatureRuntime.normalizeGameSettingFeatureList(original)
         }
 
         // The settings screen also keeps a static XML entry, so remove it after inflation.
@@ -212,10 +192,10 @@ class MainHook : XposedModule() {
             "onCreatePreferences",
             parameterCount = 2,
         ) {
-            removeColorfulLightPreference(instanceOrNull)
+            romFeatureRuntime.removeColorfulLightPreference(instanceOrNull)
         }
         afterMethod("com.zui.ugame.gamesetting.ui.options.SaverGameSettingsExtension", "onResume") {
-            removeColorfulLightPreference(instanceOrNull)
+            romFeatureRuntime.removeColorfulLightPreference(instanceOrNull)
         }
 
         // Backstop the ViewModel cache in case it was built before FeatureList.list() was filtered.
@@ -227,7 +207,7 @@ class MainHook : XposedModule() {
                 @Suppress("UNCHECKED_CAST")
                 callOriginal() as? List<Any?>
             }.getOrNull() ?: emptyList()
-            normalizeGameSettingFeatureList(original)
+            romFeatureRuntime.normalizeGameSettingFeatureList(original)
         }
 
         replaceMethodWithTrue(
@@ -450,154 +430,8 @@ class MainHook : XposedModule() {
         }
     }
 
-    private fun normalizeGameSettingFeatureList(features: List<Any?>): List<Any?> {
-        if (isBaldurBoard()) return features
-        return features.filterNot {
-            resolveGameSettingFeatureKey(it) == GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY
-        }
-    }
-
-    private fun resolveGameSettingFeatureKey(feature: Any?): String? {
-        return runCatching { ReflectCompat.callMethod(feature, "getKey") as? String }.getOrNull()
-    }
-
-    private fun removeColorfulLightPreference(fragment: Any?) {
-        if (isBaldurBoard()) return
-
-        runCatching {
-            ReflectCompat.callMethod(
-                fragment,
-                "tryRemovePreference",
-                GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY,
-            )
-            AndroidInternals.log("Removed colorful light preference from Game Helper settings")
-        }.onFailure {
-            AndroidInternals.log("Failed to remove colorful light preference", it)
-        }
-    }
-
     private fun isBaldurBoard(): Boolean {
         return AndroidInternals.isBaldurBoard()
-    }
-
-    private fun resolveKeyContainerFeatureKey(container: Any?): String? {
-        return runCatching { ReflectCompat.callMethod(container, "getKEY") as? String }.getOrNull()
-    }
-
-    private fun normalizeFeatureKeys(keys: Collection<String>): Array<String> {
-        val normalized = LinkedHashSet<String>()
-
-        keys.forEach { key ->
-            if (key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard()) return@forEach
-            normalized += key
-        }
-
-        return normalized.toTypedArray()
-    }
-
-    private fun patchExistingRomFeatureSets() {
-        runCatching {
-            val classLoader = resolveGameHelperClassLoader() ?: return
-            val featuresClass = ReflectCompat.findClass("com.zui.game.service.FeaturesBaseOnRomKt", classLoader)
-            var patchedCount = 0
-
-            featuresClass.declaredFields
-                .filter { Modifier.isStatic(it.modifiers) && it.type.name == "com.zui.game.service.RomFeatures" }
-                .forEach { field ->
-                    field.isAccessible = true
-                    patchRomFeatureKeyList(field.get(null))
-                    patchedCount += 1
-                }
-
-            AndroidInternals.log("Patched $patchedCount RomFeatures key lists")
-        }.onFailure {
-            AndroidInternals.log("Failed to patch existing RomFeatures key lists", it)
-        }
-    }
-
-    private fun patchRomFeatureKeyList(romFeatures: Any?) {
-        val keyList = runCatching {
-            ReflectCompat.getObjectField(romFeatures, "keyList") as? List<Any?>
-        }.getOrNull() ?: return
-
-        val normalized = LinkedHashMap<String, Any>()
-        keyList.forEach { featureKey ->
-            if (featureKey == null) return@forEach
-            val key = runCatching { ReflectCompat.callMethod(featureKey, "getKey") as? String }.getOrNull() ?: return@forEach
-            if (key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard()) return@forEach
-            normalized[key] = featureKey
-        }
-
-        if (!normalized.containsKey(SUPER_RESOLUTION_FEATURE_KEY)) {
-            createFeatureKeys(arrayOf(SUPER_RESOLUTION_FEATURE_KEY)).firstOrNull()?.let { featureKey ->
-                insertFeatureKey(
-                    normalized = normalized,
-                    key = SUPER_RESOLUTION_FEATURE_KEY,
-                    featureKey = featureKey,
-                    beforeKeys = listOf(LIVE_PICTURE_FEATURE_KEY, COLORFUL_LIGHT_FEATURE_KEY),
-                )
-            }
-        }
-
-        if (!normalized.containsKey(FOUR_D_VIBRATE_FEATURE_KEY)) {
-            createFeatureKeys(arrayOf(FOUR_D_VIBRATE_FEATURE_KEY)).firstOrNull()?.let { featureKey ->
-                insertFeatureKey(
-                    normalized = normalized,
-                    key = FOUR_D_VIBRATE_FEATURE_KEY,
-                    featureKey = featureKey,
-                    beforeKeys = listOf(WIDE_VISION_FEATURE_KEY, COLORFUL_LIGHT_FEATURE_KEY),
-                    afterKeys = listOf(LIVE_PICTURE_FEATURE_KEY),
-                )
-            }
-        }
-
-        runCatching {
-            ReflectCompat.setObjectField(romFeatures, "keyList", ArrayList(normalized.values))
-        }.onFailure {
-            AndroidInternals.log("Failed to overwrite RomFeatures key list", it)
-        }
-    }
-
-    private fun insertFeatureKey(
-        normalized: LinkedHashMap<String, Any>,
-        key: String,
-        featureKey: Any,
-        beforeKeys: List<String> = emptyList(),
-        afterKeys: List<String> = emptyList(),
-    ) {
-        if (normalized.containsKey(key)) return
-
-        val entries = normalized.entries.map { it.key to it.value }.toMutableList()
-        val beforeIndex = beforeKeys
-            .map { anchor -> entries.indexOfFirst { it.first == anchor } }
-            .filter { it >= 0 }
-            .minOrNull()
-
-        val afterIndex = afterKeys
-            .map { anchor -> entries.indexOfFirst { it.first == anchor } }
-            .filter { it >= 0 }
-            .maxOrNull()
-
-        val insertIndex = beforeIndex ?: afterIndex?.plus(1) ?: entries.size
-        entries.add(insertIndex, key to featureKey)
-
-        normalized.clear()
-        entries.forEach { (entryKey, entryValue) ->
-            normalized[entryKey] = entryValue
-        }
-    }
-
-    private fun createFeatureKeys(keys: Array<String>): List<Any> {
-        return runCatching {
-            val classLoader = resolveGameHelperClassLoader() ?: return emptyList()
-            val featureKeyClass = ReflectCompat.findClass("com.zui.game.service.FeatureKey", classLoader)
-            val companion = ReflectCompat.getStaticObjectField(featureKeyClass, "Companion")
-            @Suppress("UNCHECKED_CAST")
-            ReflectCompat.callMethod(companion, "createByKeys", keys) as? List<Any> ?: emptyList()
-        }.getOrElse {
-            AndroidInternals.log("Failed to create FeatureKey instances", it)
-            emptyList()
-        }
     }
 
     private fun resolveGameHelperClassLoader(): ClassLoader? {
