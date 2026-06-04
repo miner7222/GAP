@@ -98,5 +98,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.libxposed.api)
 
+    implementation(libs.libxposed.service)
     compileOnly(libs.libxposed.api)
 }

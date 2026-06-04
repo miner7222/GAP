@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+        android:name=".GapApplication"
         android:allowBackup="false"
         android:description="@string/module_description"
         android:icon="@mipmap/ic_launcher"

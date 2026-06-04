@@ -4,11 +4,13 @@ kotlin = "2.3.21"
 annotation = "1.10.0"
 
 libxposedApi = "101.0.1"
+libxposedService = "101.0.0"
 
 [libraries]
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
 
 libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposedApi" }
+libxposed-service = { group = "io.github.libxposed", name = "service", version.ref = "libxposedService" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
