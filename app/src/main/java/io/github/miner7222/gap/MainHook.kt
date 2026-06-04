@@ -11,7 +11,6 @@ import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 import com.zui.server.lsr.LsrService
-import java.io.File
 import java.lang.reflect.Modifier
 import java.util.LinkedHashSet
 import java.util.concurrent.atomic.AtomicBoolean
@@ -30,7 +29,6 @@ class MainHook : XposedModule() {
         private const val AI_SOUND_PARAMETER_DISABLED = "aisound=false"
         private const val COLORFUL_LIGHT_FEATURE_KEY = "key_colorful_light"
         private const val GAME_RESOLUTION_APPS_ARRAY = "game_resolution_apps"
-        private const val DEFAULT_SUPER_RESOLUTION_ARRAY_FLAGS = "#1#1"
         private const val GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY = "option_item_colorful_light"
         private const val PUBG_VIBRATION_SHARED_KEY = "game.pubg.mobile"
         private val PUBG_VARIANT_PACKAGES = linkedSetOf(
@@ -52,10 +50,10 @@ class MainHook : XposedModule() {
     private var fallbackLsrBinder: IBinder? = null
     @Volatile
     private var cachedGameHelperClassLoader: ClassLoader? = null
-    @Volatile
-    private var cachedSupportedPackages: Set<String>? = null
-    @Volatile
-    private var cachedSupportedPackagesSignature: String? = null
+    private val superResolutionRuntime = SuperResolutionRuntime(
+        resolveSystemContext = ::resolveSystemContext,
+        resolveProcessApplicationContext = ::resolveProcessApplicationContext,
+    )
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         AndroidInternals.log(
@@ -299,7 +297,7 @@ class MainHook : XposedModule() {
                 null
             } ?: return@replaceMethod emptyArray<String>()
 
-            val overriddenEntries = resolveSuperResolutionArrayEntries(originalEntries)
+            val overriddenEntries = superResolutionRuntime.resolveArrayEntries(originalEntries)
             if (overriddenEntries != null) {
                 AndroidInternals.log(
                     "Replaced $GAME_RESOLUTION_APPS_ARRAY with ${overriddenEntries.size} runtime entries",
@@ -450,7 +448,9 @@ class MainHook : XposedModule() {
 
     private fun HookScope.hookSuperResolutionSupportMethod(className: String, methodName: String) {
         replaceMethod(className, methodName) {
-            resolveRegisteredGamePackagesOrOriginal("$className#$methodName")
+            superResolutionRuntime.resolveRegisteredPackagesOrOriginal("$className#$methodName") {
+                callOriginal()
+            }
         }
     }
 
@@ -684,20 +684,6 @@ class MainHook : XposedModule() {
         return merged.toTypedArray()
     }
 
-    private fun HookCall.resolveRegisteredGamePackagesOrOriginal(source: String): Any? {
-        val packages = resolveSupportedPackages()
-        if (packages != null) {
-            AndroidInternals.log("Resolved ${packages.size} SR whitelist packages for $source")
-            return packages
-        }
-
-        AndroidInternals.log("Falling back to original super resolution package list for $source")
-        return runCatching { callOriginal() }.getOrElse {
-            AndroidInternals.log("Failed to call original method for $source", it)
-            emptyList<String>()
-        }
-    }
-
     private fun resolveControllerPackageName(lambdaInstance: Any?): String? {
         // Walk the this$0 chain from nested lambdas up to GameHelperViewController,
         // then read pkgName.  Check pkgName at each level BEFORE navigating deeper,
@@ -717,98 +703,6 @@ class MainHook : XposedModule() {
             AndroidInternals.log("Failed to resolve GameHelperViewController pkgName", it)
             null
         }
-    }
-
-    private fun resolveSuperResolutionArrayEntries(originalEntries: Array<String>): Array<String>? {
-        val packages = resolveSupportedPackages() ?: return null
-        val originalByPackage = LinkedHashMap<String, String>(originalEntries.size)
-
-        originalEntries.forEach { entry ->
-            val packageName = entry.substringBefore('#').trim()
-            if (packageName.isNotBlank()) {
-                originalByPackage[packageName] = entry
-            }
-        }
-
-        val normalized = LinkedHashSet<String>(packages.size)
-        packages.forEach { packageName ->
-            if (packageName.isBlank()) return@forEach
-            normalized += originalByPackage[packageName]
-                ?: "$packageName$DEFAULT_SUPER_RESOLUTION_ARRAY_FLAGS"
-        }
-
-        return normalized.toTypedArray()
-    }
-
-    private fun resolveSupportedPackages(): List<String>? {
-        return runCatching {
-            readSupportedPackagesFromSettings()?.let { packages ->
-                val signature = "settings:${packages.joinToString(",")}"
-                val cached = cachedSupportedPackages
-                if (cached != null && cachedSupportedPackagesSignature == signature) {
-                    return@runCatching ArrayList(cached)
-                }
-
-                cachedSupportedPackages = LinkedHashSet(packages)
-                cachedSupportedPackagesSignature = signature
-                return@runCatching packages
-            }
-
-            val whitelistFile = File(SupportedPackageList.ACTIVE_LIST_PATH)
-            val signature = buildString {
-                append("file:")
-                append(whitelistFile.exists())
-                append(':')
-                append(whitelistFile.length())
-                append(':')
-                append(whitelistFile.lastModified())
-            }
-            val cached = cachedSupportedPackages
-            if (cached != null && cachedSupportedPackagesSignature == signature) {
-                return@runCatching ArrayList(cached)
-            }
-
-            val packages = SupportedPackageList.readPackages(whitelistFile)
-                .filterTo(ArrayList()) { packageName ->
-                    packageName.isNotBlank() && packageName != GAME_HELPER_PACKAGE
-                }
-            if (packages.isEmpty()) {
-                cachedSupportedPackages = null
-                cachedSupportedPackagesSignature = null
-                return@runCatching null
-            }
-
-            cachedSupportedPackages = LinkedHashSet(packages)
-            cachedSupportedPackagesSignature = signature
-            packages
-        }.getOrElse {
-            AndroidInternals.log("Failed to resolve SR whitelist packages", it)
-            null
-        }
-    }
-
-    private fun readSupportedPackagesFromSettings(): List<String>? {
-        val context = resolveSystemContext() ?: resolveProcessApplicationContext() ?: return null
-        val rawValue = runCatching {
-            Settings.Global.getString(context.contentResolver, SupportedPackageList.RUNTIME_SETTINGS_KEY)
-        }.getOrElse {
-            AndroidInternals.log("Failed to read runtime SR whitelist from Settings.Global", it)
-            null
-        } ?: return null
-
-        return SupportedPackageList.parsePackages(rawValue)
-            .filterTo(ArrayList()) { packageName ->
-                packageName.isNotBlank() && packageName != GAME_HELPER_PACKAGE
-            }
-    }
-
-    private fun shouldExposeSuperResolution(packageName: String): Boolean {
-        if (packageName.isBlank() || packageName == GAME_HELPER_PACKAGE) {
-            return false
-        }
-
-        val packages = resolveSupportedPackages() ?: return true
-        return packageName in packages
     }
 
     private fun normalizeGameSettingFeatureList(features: List<Any?>): List<Any?> {
@@ -851,7 +745,8 @@ class MainHook : XposedModule() {
             val key = resolveItemKey(item)
             when {
                 key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard() -> return@forEach
-                key == SUPER_RESOLUTION_FEATURE_KEY && !shouldExposeSuperResolution(packageName) -> return@forEach
+                key == SUPER_RESOLUTION_FEATURE_KEY &&
+                    !superResolutionRuntime.shouldExpose(packageName) -> return@forEach
                 key == FOUR_D_VIBRATE_FEATURE_KEY && !shouldExposeFourDVibration(controller, packageName) -> return@forEach
             }
             normalized += item
