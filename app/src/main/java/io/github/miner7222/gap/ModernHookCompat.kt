@@ -48,31 +48,21 @@ internal class MemberHookBuilder(
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
-            .intercept { chain ->
-                val param = HookCall(chain)
-                param.block()
-                chain.proceed(param.args)
-            }
+            .intercept { chain -> HookChainRunner.runBefore(chain, block) }
     }
 
     fun after(block: HookCall.() -> Unit) {
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
-            .intercept { chain ->
-                val param = HookCall(chain, chain.proceed())
-                param.block()
-                param.result
-            }
+            .intercept { chain -> HookChainRunner.runAfter(chain, block) }
     }
 
     fun replace(block: HookCall.() -> Any?) {
         val executable = resolveExecutable()
         module.hook(executable)
             .setExceptionMode(ExceptionMode.PROTECTIVE)
-            .intercept { chain ->
-                HookCall(chain).block()
-            }
+            .intercept { chain -> HookChainRunner.runReplace(chain, block) }
     }
 
     fun replaceWithTrue() {
@@ -123,6 +113,24 @@ internal class MethodSpec {
         return paramTypes?.joinToString(prefix = "(", postfix = ")") { it.name }
             ?: paramCount?.toString()
             ?: "any"
+    }
+}
+
+internal object HookChainRunner {
+    fun runBefore(chain: XposedInterface.Chain, block: HookCall.() -> Unit): Any? {
+        val call = HookCall(chain)
+        call.block()
+        return chain.proceed(call.args)
+    }
+
+    fun runAfter(chain: XposedInterface.Chain, block: HookCall.() -> Unit): Any? {
+        val call = HookCall(chain, chain.proceed())
+        call.block()
+        return call.result
+    }
+
+    fun runReplace(chain: XposedInterface.Chain, block: HookCall.() -> Any?): Any? {
+        return HookCall(chain).block()
     }
 }
 
