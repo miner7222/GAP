@@ -4,6 +4,7 @@ import java.io.File
 import java.util.Properties
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class XposedMetadataTest {
@@ -39,6 +40,15 @@ class XposedMetadataTest {
     fun legacyXposedEntryIsAbsent() {
         assertFalse(appDir.resolve("src/main/assets/xposed_init").exists())
         assertFalse(appDir.resolve("src/main/resources/assets/xposed_init").exists())
+    }
+
+    @Test
+    fun proguardKeepsModernEntryAndAdaptsEntryResource() {
+        val rules = appDir.resolve("proguard-rules.pro").readText()
+
+        assertTrue(rules.contains("-keep class io.github.miner7222.gap.MainHook { *; }"))
+        assertTrue(rules.contains("-adaptresourcefilecontents META-INF/xposed/java_init.list"))
+        assertFalse(rules.contains("io.github.miner7222.lsr."))
     }
 
     private fun readResourceLines(path: String): List<String> {
