@@ -5,13 +5,11 @@
 
 ## Description
 
-This is the Xposed side of the Lenovo Super Resolution port.
+This module hooks Lenovo Game Assistant to manage which games are enabled for Ultra HD Vision.
 
-It patches Lenovo Game Assistant at runtime and includes **GAP** (`Game Assistant Plus`), the app used to manage which games are enabled for Super Resolution / Frame Interpolation.
+It also widens selected region-gated feature paths where needed.
 
-It also keeps Lenovo's Game Helper resource metadata aligned with the rebuilt package, widens selected region-gated feature paths where needed.
-
-This module is meant to be used together with **LSRPort**.
+This module is meant to be used together with **SRFI Unlocker**.
 
 ---
 
@@ -19,7 +17,7 @@ This module is meant to be used together with **LSRPort**.
 
 1. **Root**
 2. **[LSPosed](https://github.com/JingMatrix/Vector)**
-3. **[LSRPort](https://gitlab.com/miner7222/lsrport)**
+3. **[SRFI Unlocker](https://gitlab.com/miner7222/lsrport)**
 
 ---
 
@@ -37,19 +35,4 @@ This module is meant to be used together with **LSRPort**.
 ## Usage
 
 - Open **GAP** if you want to add or remove supported games.
-- After saving, GAP updates the runtime whitelist, syncs it to `Settings.Global`, restarts `gppservice`, and force-stops `com.zui.game.service` so changes apply immediately.
 - Launch your game and use Game Assistant's **Ultra HD Vision** toggle in the sidebar.
-
----
-
-## Troubleshooting
-
-- If the **Ultra HD Vision** toggle does not appear, make sure the module is enabled in **LSPosed** and the game is selected in **GAP**.
-- If GAP cannot save changes, check that root access was granted.
-
----
-
-## Notes
-
-- GAP package name: `io.github.miner7222.gap`
-- GAP is both the launcher app and the LSPosed settings entry for this module.
