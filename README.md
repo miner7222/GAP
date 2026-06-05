@@ -16,7 +16,7 @@ This module is meant to be used together with **SRFI Unlocker**.
 ## Requirements
 
 1. **Root**
-2. **[LSPosed](https://github.com/JingMatrix/Vector)**
+2. **LSPosed**
 3. **[SRFI Unlocker](https://gitlab.com/miner7222/lsrport)**
 
 ---
