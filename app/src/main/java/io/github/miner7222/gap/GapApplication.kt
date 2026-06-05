@@ -17,6 +17,10 @@ class GapApplication : Application(), XposedServiceHelper.OnServiceListener {
     private val scopeRequester = XposedScopeRequester()
     @Volatile
     private var hasBoundXposedService = false
+    @Volatile
+    private var currentXposedService: XposedService? = null
+    @Volatile
+    private var currentMissingScopes: List<String> = emptyList()
 
     override fun onCreate() {
         super.onCreate()
@@ -27,23 +31,59 @@ class GapApplication : Application(), XposedServiceHelper.OnServiceListener {
         }
         mainHandler.postDelayed({
             if (!hasBoundXposedService) {
-                updateXposedServiceState(XposedServiceState.UNAVAILABLE)
+                updateXposedServiceState(XposedServiceState.Unavailable)
             }
         }, XPOSED_SERVICE_BIND_TIMEOUT_MS)
     }
 
     override fun onServiceBind(service: XposedService) {
         hasBoundXposedService = true
-        updateXposedServiceState(XposedServiceState.BOUND)
+        currentXposedService = service
         executor.execute {
-            scopeRequester.requestMissingScopes(service)
+            val missingScopes = scopeRequester.missingScopes(service)
+            currentMissingScopes = missingScopes
+            updateXposedServiceState(XposedServiceState.Bound(missingScopes))
         }
     }
 
     override fun onServiceDied(service: XposedService) {
         hasBoundXposedService = false
+        currentXposedService = null
+        currentMissingScopes = emptyList()
         Log.i(TAG, "Xposed service died")
-        updateXposedServiceState(XposedServiceState.UNAVAILABLE)
+        updateXposedServiceState(XposedServiceState.Unavailable)
+    }
+
+    fun requestMissingXposedScopes() {
+        val service = currentXposedService
+        if (service == null) {
+            updateXposedServiceState(XposedServiceState.Unavailable)
+            return
+        }
+
+        executor.execute {
+            val scopesToRequest = currentMissingScopes.ifEmpty {
+                scopeRequester.missingScopes(service)
+            }
+            if (scopesToRequest.isEmpty()) {
+                currentMissingScopes = emptyList()
+                updateXposedServiceState(XposedServiceState.Bound(emptyList()))
+                return@execute
+            }
+
+            scopeRequester.requestScopes(
+                service = service,
+                scopes = scopesToRequest,
+                onApproved = { approved ->
+                    val remainingScopes = currentMissingScopes.filterNot { approved.contains(it) }
+                    currentMissingScopes = remainingScopes
+                    updateXposedServiceState(XposedServiceState.Bound(remainingScopes))
+                },
+                onFailed = {
+                    Log.w(TAG, "LSPosed scope request failed: $it")
+                },
+            )
+        }
     }
 
     private fun updateXposedServiceState(state: XposedServiceState) {
@@ -64,7 +104,7 @@ class GapApplication : Application(), XposedServiceHelper.OnServiceListener {
         private const val TAG = "GAP"
         private const val XPOSED_SERVICE_BIND_TIMEOUT_MS = 1500L
         @Volatile
-        private var xposedServiceState = XposedServiceState.WAITING
+        private var xposedServiceState: XposedServiceState = XposedServiceState.Waiting
         private val xposedServiceStateListeners = CopyOnWriteArraySet<XposedServiceStateListener>()
 
         fun addXposedServiceStateListener(

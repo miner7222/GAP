@@ -33,6 +33,8 @@
     <string name="lsrport_missing_title">Magisk Module Required</string>
     <string name="lsrport_missing_message">LSRPort is not installed. Install the Magisk module and reboot before using GAP.</string>
     <string name="lsposed_module_disabled_banner">Enable the GAP module in LSPosed to activate Game Assistant hooks.</string>
+    <string name="lsposed_scope_missing_banner">Module scope is missing %1$s.</string>
+    <string name="lsposed_scope_request_button">Request scope</string>
     <string name="download_button">Download</string>
     <string name="exit_button">Exit</string>
     <string name="lsrport_download_open_failed">Could not open the LSRPort releases page.</string>

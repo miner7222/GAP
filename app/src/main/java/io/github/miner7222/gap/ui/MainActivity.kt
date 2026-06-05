@@ -29,6 +29,7 @@ import io.github.miner7222.gap.DeviceCompatibility.CompatibilityStatus
 import io.github.miner7222.gap.GapApplication
 import io.github.miner7222.gap.R
 import io.github.miner7222.gap.SupportedPackageList
+import io.github.miner7222.gap.XposedServiceBannerState
 import io.github.miner7222.gap.XposedServiceBannerPresenter
 import io.github.miner7222.gap.XposedServiceState
 import io.github.miner7222.gap.databinding.ActivityMainBinding
@@ -89,6 +90,9 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
             applyFilter()
         }
         binding.saveButton.setOnClickListener { saveSelection() }
+        binding.lsposedScopeRequestButton.setOnClickListener {
+            (application as? GapApplication)?.requestMissingXposedScopes()
+        }
         syncMenuState(isBusy = false)
         installSystemBarInsets()
 
@@ -131,9 +135,7 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
     override fun onXposedServiceStateChanged(state: XposedServiceState) {
         runOnUiThread {
             if (!::binding.isInitialized || isFinishing || isDestroyed) return@runOnUiThread
-            setLsposedActivationBannerVisible(
-                XposedServiceBannerPresenter.shouldShowActivationBanner(state),
-            )
+            renderLsposedBanner(XposedServiceBannerPresenter.resolve(state))
         }
     }
 
@@ -403,7 +405,29 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
         syncMenuState(isBusy = isBusy)
     }
 
-    private fun setLsposedActivationBannerVisible(visible: Boolean) {
+    private fun renderLsposedBanner(banner: XposedServiceBannerState) {
+        when (banner) {
+            XposedServiceBannerState.Hidden -> {
+                binding.lsposedScopeRequestButton.isVisible = false
+                setLsposedBannerVisible(false)
+            }
+
+            XposedServiceBannerState.ActivationRequired -> {
+                binding.lsposedActivationBannerText.text = getString(R.string.lsposed_module_disabled_banner)
+                binding.lsposedScopeRequestButton.isVisible = false
+                setLsposedBannerVisible(true)
+            }
+
+            is XposedServiceBannerState.MissingScopes -> {
+                binding.lsposedActivationBannerText.text =
+                    getString(R.string.lsposed_scope_missing_banner, banner.displayScopes)
+                binding.lsposedScopeRequestButton.isVisible = true
+                setLsposedBannerVisible(true)
+            }
+        }
+    }
+
+    private fun setLsposedBannerVisible(visible: Boolean) {
         if (binding.lsposedActivationBanner.isVisible == visible) return
         val transition = TransitionSet()
             .addTransition(ChangeBounds())

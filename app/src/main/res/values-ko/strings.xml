@@ -31,6 +31,8 @@
     <string name="lsrport_missing_title">Magisk 모듈 필요</string>
     <string name="lsrport_missing_message">LSRPort가 설치되어 있지 않습니다. GAP을 사용하려면 Magisk 모듈을 설치한 뒤 재부팅하세요.</string>
     <string name="lsposed_module_disabled_banner">게임 어시스턴트 후크를 활성화하려면 LSPosed에서 GAP 모듈을 활성화하세요.</string>
+    <string name="lsposed_scope_missing_banner">모듈 범위에 %1$s 가 누락되었습니다.</string>
+    <string name="lsposed_scope_request_button">범위 요청</string>
     <string name="download_button">다운로드</string>
     <string name="exit_button">종료</string>
     <string name="lsrport_download_open_failed">LSRPort 릴리즈 페이지를 열지 못했습니다.</string>
