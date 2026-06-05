@@ -62,6 +62,15 @@
                 android:layout_marginStart="8dp"
                 android:text="@string/lsposed_scope_request_button"
                 android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/rootRetryButton"
+                style="@style/Widget.GAP.LsposedBannerAction"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/retry_button"
+                android:visibility="gone" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

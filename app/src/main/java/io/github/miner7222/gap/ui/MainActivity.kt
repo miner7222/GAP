@@ -28,6 +28,7 @@ import io.github.miner7222.gap.DeviceCompatibility
 import io.github.miner7222.gap.DeviceCompatibility.CompatibilityStatus
 import io.github.miner7222.gap.GapApplication
 import io.github.miner7222.gap.R
+import io.github.miner7222.gap.RootAccessBannerPresenter
 import io.github.miner7222.gap.SupportedPackageList
 import io.github.miner7222.gap.XposedServiceBannerState
 import io.github.miner7222.gap.XposedServiceBannerPresenter
@@ -53,6 +54,8 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
     private var showSystemApps = false
     private var shownUpdateTag: String? = null
     private var busy = false
+    private var rootAccessMissing = false
+    private var currentXposedBannerState: XposedServiceBannerState = XposedServiceBannerState.Hidden
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyThemeMode(readSavedThemeMode())
@@ -92,6 +95,11 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
         binding.saveButton.setOnClickListener { saveSelection() }
         binding.lsposedScopeRequestButton.setOnClickListener {
             (application as? GapApplication)?.requestMissingXposedScopes()
+        }
+        binding.rootRetryButton.setOnClickListener {
+            rootAccessMissing = false
+            setStatusBannerVisible(false)
+            requestRootAndLoadPackages()
         }
         syncMenuState(isBusy = false)
         installSystemBarInsets()
@@ -135,7 +143,8 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
     override fun onXposedServiceStateChanged(state: XposedServiceState) {
         runOnUiThread {
             if (!::binding.isInitialized || isFinishing || isDestroyed) return@runOnUiThread
-            renderLsposedBanner(XposedServiceBannerPresenter.resolve(state))
+            currentXposedBannerState = XposedServiceBannerPresenter.resolve(state)
+            renderStatusBanner()
         }
     }
 
@@ -149,11 +158,15 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
                 null
             }
             runOnUiThread {
-                if (!hasRootAccess) {
+                if (RootAccessBannerPresenter.shouldShowRootBanner(hasRootAccess)) {
+                    rootAccessMissing = true
                     setBusy(false)
-                    showRootAccessDialog()
+                    renderStatusBanner()
                     return@runOnUiThread
                 }
+
+                rootAccessMissing = false
+                renderStatusBanner()
 
                 if (moduleInstalled?.getOrDefault(false) == true) {
                     loadPackages()
@@ -405,29 +418,45 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
         syncMenuState(isBusy = isBusy)
     }
 
+    private fun renderStatusBanner() {
+        if (rootAccessMissing) {
+            renderRootAccessBanner()
+        } else {
+            renderLsposedBanner(currentXposedBannerState)
+        }
+    }
+
+    private fun renderRootAccessBanner() {
+        binding.lsposedActivationBannerText.text = getString(R.string.root_required_banner_message)
+        binding.lsposedScopeRequestButton.isVisible = false
+        binding.rootRetryButton.isVisible = true
+        setStatusBannerVisible(true)
+    }
+
     private fun renderLsposedBanner(banner: XposedServiceBannerState) {
+        binding.rootRetryButton.isVisible = false
         when (banner) {
             XposedServiceBannerState.Hidden -> {
                 binding.lsposedScopeRequestButton.isVisible = false
-                setLsposedBannerVisible(false)
+                setStatusBannerVisible(false)
             }
 
             XposedServiceBannerState.ActivationRequired -> {
                 binding.lsposedActivationBannerText.text = getString(R.string.lsposed_module_disabled_banner)
                 binding.lsposedScopeRequestButton.isVisible = false
-                setLsposedBannerVisible(true)
+                setStatusBannerVisible(true)
             }
 
             is XposedServiceBannerState.MissingScopes -> {
                 binding.lsposedActivationBannerText.text =
                     getString(R.string.lsposed_scope_missing_banner, banner.displayScopes)
                 binding.lsposedScopeRequestButton.isVisible = true
-                setLsposedBannerVisible(true)
+                setStatusBannerVisible(true)
             }
         }
     }
 
-    private fun setLsposedBannerVisible(visible: Boolean) {
+    private fun setStatusBannerVisible(visible: Boolean) {
         if (binding.lsposedActivationBanner.isVisible == visible) return
         val transition = TransitionSet()
             .addTransition(ChangeBounds())
@@ -449,20 +478,6 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
         }
         binding.toolbar.menu.findItem(R.id.action_restore_defaults)?.isEnabled =
             !isBusy && selectedPackages != baselinePackages
-    }
-
-    private fun showRootAccessDialog() {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.root_required_title)
-            .setMessage(R.string.root_required_message)
-            .setCancelable(false)
-            .setPositiveButton(R.string.retry_button) { _, _ ->
-                requestRootAndLoadPackages()
-            }
-            .setNegativeButton(R.string.close_button) { _, _ ->
-                finish()
-            }
-            .show()
     }
 
     private fun showLsrPortMissingDialog() {
