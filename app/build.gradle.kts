@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import java.util.zip.ZipFile
 
 plugins {
     alias(libs.plugins.android.application)
@@ -87,6 +88,41 @@ tasks.register("printVersionName") {
         println(android.defaultConfig.versionName)
     }
 }
+
+tasks.register("verifyDebugXposedMetadata") {
+    group = "verification"
+    description = "Verifies modern Xposed metadata is packaged into the debug APK."
+    dependsOn("assembleDebug")
+
+    val metadataNames = listOf("java_init.list", "module.prop", "scope.list")
+    val metadataDir = layout.projectDirectory.dir("src/main/resources/META-INF/xposed")
+    val apkFile = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk")
+
+    inputs.files(metadataNames.map { metadataDir.file(it) })
+    inputs.file(apkFile)
+
+    doLast {
+        val apk = apkFile.get().asFile
+        if (!apk.isFile) {
+            throw GradleException("Debug APK was not found: ${apk.absolutePath}")
+        }
+
+        ZipFile(apk).use { zip ->
+            metadataNames.forEach { name ->
+                val entryName = "META-INF/xposed/$name"
+                val entry = zip.getEntry(entryName)
+                    ?: throw GradleException("$entryName is missing from ${apk.name}")
+                val expected = metadataDir.file(name).asFile.readText().normalizeMetadata()
+                val actual = zip.getInputStream(entry).bufferedReader().use { it.readText() }.normalizeMetadata()
+                if (actual != expected) {
+                    throw GradleException("$entryName content differs from src/main/resources")
+                }
+            }
+        }
+    }
+}
+
+fun String.normalizeMetadata(): String = replace("\r\n", "\n").trim()
 
 dependencies {
     implementation(libs.androidx.annotation)
