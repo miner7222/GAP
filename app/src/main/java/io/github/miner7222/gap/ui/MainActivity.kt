@@ -10,6 +10,7 @@ import android.transition.ChangeBounds
 import android.transition.Fade
 import android.transition.TransitionManager
 import android.transition.TransitionSet
+import android.view.View
 import android.view.animation.PathInterpolator
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -56,6 +57,7 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
     private var busy = false
     private var rootAccessMissing = false
     private var currentXposedBannerState: XposedServiceBannerState = XposedServiceBannerState.Hidden
+    private var currentUpdateBannerState: UpdateBannerState = UpdateBannerState.Hidden
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyThemeMode(readSavedThemeMode())
@@ -100,6 +102,9 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
             rootAccessMissing = false
             setStatusBannerVisible(false)
             requestRootAndLoadPackages()
+        }
+        binding.updateOpenButton.setOnClickListener {
+            openGitHubReleases()
         }
         syncMenuState(isBusy = false)
         installSystemBarInsets()
@@ -190,9 +195,15 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
                 return@execute
             }
 
-            if (!UpdateChecker.isNewerRelease(release.tagName, BuildConfig.VERSION_NAME)) {
+            val updateBanner = UpdateBannerPresenter.resolve(
+                currentVersionName = BuildConfig.VERSION_NAME,
+                release = release,
+            )
+            if (updateBanner == UpdateBannerState.Hidden) {
                 if (manual) {
                     runOnUiThread {
+                        currentUpdateBannerState = UpdateBannerState.Hidden
+                        renderUpdateBanner()
                         showToast(getString(R.string.update_check_no_update))
                     }
                 }
@@ -203,11 +214,13 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
                 if (isFinishing || isDestroyed) {
                     return@runOnUiThread
                 }
-                if (!manual && shownUpdateTag == release.tagName) {
+                val availableBanner = updateBanner as UpdateBannerState.Available
+                if (!manual && shownUpdateTag == availableBanner.latestVersionName) {
                     return@runOnUiThread
                 }
-                shownUpdateTag = release.tagName
-                showUpdateDialog(release)
+                shownUpdateTag = availableBanner.latestVersionName
+                currentUpdateBannerState = availableBanner
+                renderUpdateBanner()
             }
         }
     }
@@ -457,14 +470,36 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
     }
 
     private fun setStatusBannerVisible(visible: Boolean) {
-        if (binding.lsposedActivationBanner.isVisible == visible) return
+        setBannerVisible(binding.lsposedActivationBanner, visible)
+    }
+
+    private fun renderUpdateBanner() {
+        when (val banner = currentUpdateBannerState) {
+            UpdateBannerState.Hidden -> setUpdateBannerVisible(false)
+            is UpdateBannerState.Available -> {
+                binding.updateBannerText.text = getString(
+                    R.string.update_available_banner,
+                    banner.currentVersionName,
+                    banner.latestVersionName,
+                )
+                setUpdateBannerVisible(true)
+            }
+        }
+    }
+
+    private fun setUpdateBannerVisible(visible: Boolean) {
+        setBannerVisible(binding.updateBanner, visible)
+    }
+
+    private fun setBannerVisible(bannerView: View, visible: Boolean) {
+        if (bannerView.isVisible == visible) return
         val transition = TransitionSet()
             .addTransition(ChangeBounds())
             .addTransition(Fade())
             .setDuration(BANNER_TRANSITION_DURATION_MS)
             .setInterpolator(PathInterpolator(0.05f, 0.7f, 0.1f, 1f))
         TransitionManager.beginDelayedTransition(binding.root, transition)
-        binding.lsposedActivationBanner.isVisible = visible
+        bannerView.isVisible = visible
     }
 
     private fun syncMenuState(isBusy: Boolean) {
@@ -491,23 +526,6 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
             .setNegativeButton(R.string.exit_button) { _, _ ->
                 finish()
             }
-            .show()
-    }
-
-    private fun showUpdateDialog(release: ReleaseInfo) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.update_available_title)
-            .setMessage(
-                getString(
-                    R.string.update_available_message,
-                    BuildConfig.VERSION_NAME,
-                    release.tagName,
-                ),
-            )
-            .setPositiveButton(R.string.update_open_github) { _, _ ->
-                openGitHubReleases()
-            }
-            .setNegativeButton(R.string.update_no_button, null)
             .show()
     }
 

@@ -50,6 +50,10 @@
         <item name="android:textColor">?attr/colorOnErrorContainer</item>
     </style>
 
+    <style name="TextAppearance.GAP.UpdateBanner" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">?attr/colorOnPrimaryContainer</item>
+    </style>
+
     <style name="TextAppearance.GAP.PackageName" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:fontFamily">monospace</item>
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
@@ -69,10 +73,20 @@
         <item name="shapeAppearance">@style/ShapeAppearance.GAP.CornerLarge</item>
     </style>
 
+    <style name="Widget.GAP.UpdateBanner" parent="Widget.Material3.CardView.Filled">
+        <item name="shapeAppearance">@style/ShapeAppearance.GAP.CornerLarge</item>
+    </style>
+
     <style name="Widget.GAP.LsposedBannerAction" parent="Widget.Material3.Button.TextButton">
         <item name="android:textColor">?attr/colorOnErrorContainer</item>
         <item name="iconTint">?attr/colorOnErrorContainer</item>
         <item name="rippleColor">?attr/colorOnErrorContainer</item>
+    </style>
+
+    <style name="Widget.GAP.UpdateBannerAction" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textColor">?attr/colorOnPrimaryContainer</item>
+        <item name="iconTint">?attr/colorOnPrimaryContainer</item>
+        <item name="rippleColor">?attr/colorOnPrimaryContainer</item>
     </style>
 
     <style name="Widget.GAP.PackageCard" parent="Widget.Material3.CardView.Filled">

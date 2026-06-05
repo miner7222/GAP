@@ -26,6 +26,7 @@
     <string name="update_check_action">업데이트 확인</string>
     <string name="update_check_no_update">이미 최신 버전입니다.</string>
     <string name="update_check_failed">업데이트를 확인하지 못했습니다.</string>
+    <string name="update_available_banner">업데이트 가능: %1$s -> %2$s</string>
     <string name="root_required_title">ROOT 권한 필요</string>
     <string name="root_required_message">GAP에 ROOT 권한을 부여한 뒤 다시 시도하세요.</string>
     <string name="root_required_banner_message">GAP에 ROOT 권한을 부여하세요.</string>
@@ -40,6 +41,7 @@
     <string name="unsupported_os_version">지원하지 않는 OS 버전입니다.</string>
     <string name="unsupported_soc">지원하지 않는 SOC입니다.</string>
     <string name="retry_button">다시 시도</string>
+    <string name="open_button">열기</string>
     <string name="cancel_button">취소</string>
     <string name="close_button">닫기</string>
     <string name="update_available_title">업데이트 가능</string>
