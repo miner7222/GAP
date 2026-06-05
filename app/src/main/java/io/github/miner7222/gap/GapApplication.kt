@@ -21,9 +21,12 @@ class GapApplication : Application(), XposedServiceHelper.OnServiceListener {
     private var currentXposedService: XposedService? = null
     @Volatile
     private var currentMissingScopes: List<String> = emptyList()
+    @Volatile
+    private var currentScopeRebootRequired = false
 
     override fun onCreate() {
         super.onCreate()
+        currentScopeRebootRequired = XposedScopeRebootRequirement.isPending(this)
         runCatching {
             XposedServiceHelper.registerListener(this)
         }.onFailure {
@@ -40,9 +43,15 @@ class GapApplication : Application(), XposedServiceHelper.OnServiceListener {
         hasBoundXposedService = true
         currentXposedService = service
         executor.execute {
+            currentScopeRebootRequired = XposedScopeRebootRequirement.isPending(this)
             val missingScopes = scopeRequester.missingScopes(service)
             currentMissingScopes = missingScopes
-            updateXposedServiceState(XposedServiceState.Bound(missingScopes))
+            updateXposedServiceState(
+                XposedServiceState.Bound(
+                    missingScopes = missingScopes,
+                    scopeRebootRequired = currentScopeRebootRequired,
+                ),
+            )
         }
     }
 
@@ -67,7 +76,13 @@ class GapApplication : Application(), XposedServiceHelper.OnServiceListener {
             }
             if (scopesToRequest.isEmpty()) {
                 currentMissingScopes = emptyList()
-                updateXposedServiceState(XposedServiceState.Bound(emptyList()))
+                currentScopeRebootRequired = XposedScopeRebootRequirement.isPending(this)
+                updateXposedServiceState(
+                    XposedServiceState.Bound(
+                        missingScopes = emptyList(),
+                        scopeRebootRequired = currentScopeRebootRequired,
+                    ),
+                )
                 return@execute
             }
 
@@ -75,9 +90,18 @@ class GapApplication : Application(), XposedServiceHelper.OnServiceListener {
                 service = service,
                 scopes = scopesToRequest,
                 onApproved = { approved ->
+                    if (XposedScopeRebootRequirement.requiresRebootForApprovedScopes(approved)) {
+                        XposedScopeRebootRequirement.markPending(this)
+                        currentScopeRebootRequired = true
+                    }
                     val remainingScopes = currentMissingScopes.filterNot { approved.contains(it) }
                     currentMissingScopes = remainingScopes
-                    updateXposedServiceState(XposedServiceState.Bound(remainingScopes))
+                    updateXposedServiceState(
+                        XposedServiceState.Bound(
+                            missingScopes = remainingScopes,
+                            scopeRebootRequired = currentScopeRebootRequired,
+                        ),
+                    )
                 },
                 onFailed = {
                     Log.w(TAG, "LSPosed scope request failed: $it")

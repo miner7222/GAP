@@ -5,6 +5,7 @@ sealed interface XposedServiceState {
     data object Unavailable : XposedServiceState
     data class Bound(
         val missingScopes: List<String>,
+        val scopeRebootRequired: Boolean = false,
     ) : XposedServiceState
 }
 
@@ -36,4 +37,12 @@ sealed class XposedServiceBannerState(
         val missingScopes: List<String>,
         val displayScopes: String,
     ) : XposedServiceBannerState(showScopeRequestAction = true)
+}
+
+object XposedScopeRebootBannerPresenter {
+    fun shouldShow(state: XposedServiceState): Boolean {
+        return state is XposedServiceState.Bound &&
+            state.scopeRebootRequired &&
+            state.missingScopes.isEmpty()
+    }
 }

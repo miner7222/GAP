@@ -34,6 +34,7 @@ import io.github.miner7222.gap.SupportedPackageList
 import io.github.miner7222.gap.XposedServiceBannerState
 import io.github.miner7222.gap.XposedServiceBannerPresenter
 import io.github.miner7222.gap.XposedServiceState
+import io.github.miner7222.gap.XposedScopeRebootBannerPresenter
 import io.github.miner7222.gap.databinding.ActivityMainBinding
 import io.github.miner7222.gap.databinding.DialogAboutBinding
 import java.util.LinkedHashSet
@@ -57,6 +58,7 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
     private var busy = false
     private var rootAccessMissing = false
     private var currentXposedBannerState: XposedServiceBannerState = XposedServiceBannerState.Hidden
+    private var scopeRebootBannerVisible = false
     private var currentUpdateBannerState: UpdateBannerState = UpdateBannerState.Hidden
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,7 +151,9 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
         runOnUiThread {
             if (!::binding.isInitialized || isFinishing || isDestroyed) return@runOnUiThread
             currentXposedBannerState = XposedServiceBannerPresenter.resolve(state)
+            scopeRebootBannerVisible = XposedScopeRebootBannerPresenter.shouldShow(state)
             renderStatusBanner()
+            renderScopeRebootBanner()
         }
     }
 
@@ -471,6 +475,17 @@ class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListe
 
     private fun setStatusBannerVisible(visible: Boolean) {
         setBannerVisible(binding.lsposedActivationBanner, visible)
+    }
+
+    private fun renderScopeRebootBanner() {
+        if (scopeRebootBannerVisible) {
+            binding.scopeRebootBannerText.setText(R.string.lsposed_scope_reboot_required_banner)
+        }
+        setScopeRebootBannerVisible(scopeRebootBannerVisible)
+    }
+
+    private fun setScopeRebootBannerVisible(visible: Boolean) {
+        setBannerVisible(binding.scopeRebootBanner, visible)
     }
 
     private fun renderUpdateBanner() {
