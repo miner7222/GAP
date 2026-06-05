@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.miner7222.gap"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1050
-        versionName = "v1.0.5"
+        versionCode = 1060
+        versionName = "v1.0.6"
     }
 
     signingConfigs {
