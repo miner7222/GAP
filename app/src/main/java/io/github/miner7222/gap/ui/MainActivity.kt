@@ -6,6 +6,11 @@ import android.content.res.Configuration
 import android.graphics.Paint
 import android.net.Uri
 import android.os.Bundle
+import android.transition.ChangeBounds
+import android.transition.Fade
+import android.transition.TransitionManager
+import android.transition.TransitionSet
+import android.view.animation.PathInterpolator
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -21,15 +26,18 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.miner7222.gap.BuildConfig
 import io.github.miner7222.gap.DeviceCompatibility
 import io.github.miner7222.gap.DeviceCompatibility.CompatibilityStatus
+import io.github.miner7222.gap.GapApplication
 import io.github.miner7222.gap.R
 import io.github.miner7222.gap.SupportedPackageList
+import io.github.miner7222.gap.XposedServiceBannerPresenter
+import io.github.miner7222.gap.XposedServiceState
 import io.github.miner7222.gap.databinding.ActivityMainBinding
 import io.github.miner7222.gap.databinding.DialogAboutBinding
 import java.util.LinkedHashSet
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), GapApplication.XposedServiceStateListener {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: PackageListAdapter
@@ -90,6 +98,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        GapApplication.addXposedServiceStateListener(this, notifyImmediately = true)
+    }
+
+    override fun onStop() {
+        GapApplication.removeXposedServiceStateListener(this)
+        super.onStop()
+    }
+
     private fun checkDeviceCompatibility(): Boolean {
         val status = DeviceCompatibility.evaluate(
             AppSystemProperties.get(DeviceCompatibility.ZUI_VERSION_PROPERTY),
@@ -108,6 +126,15 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         executor.shutdownNow()
         super.onDestroy()
+    }
+
+    override fun onXposedServiceStateChanged(state: XposedServiceState) {
+        runOnUiThread {
+            if (!::binding.isInitialized || isFinishing || isDestroyed) return@runOnUiThread
+            setLsposedActivationBannerVisible(
+                XposedServiceBannerPresenter.shouldShowActivationBanner(state),
+            )
+        }
     }
 
     private fun requestRootAndLoadPackages() {
@@ -376,6 +403,17 @@ class MainActivity : AppCompatActivity() {
         syncMenuState(isBusy = isBusy)
     }
 
+    private fun setLsposedActivationBannerVisible(visible: Boolean) {
+        if (binding.lsposedActivationBanner.isVisible == visible) return
+        val transition = TransitionSet()
+            .addTransition(ChangeBounds())
+            .addTransition(Fade())
+            .setDuration(BANNER_TRANSITION_DURATION_MS)
+            .setInterpolator(PathInterpolator(0.05f, 0.7f, 0.1f, 1f))
+        TransitionManager.beginDelayedTransition(binding.root, transition)
+        binding.lsposedActivationBanner.isVisible = visible
+    }
+
     private fun syncMenuState(isBusy: Boolean) {
         binding.toolbar.menu.findItem(R.id.action_show_not_installed)?.apply {
             isChecked = showNotInstalledPackages
@@ -548,5 +586,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val UI_PREFS_NAME = "ui_preferences"
         private const val PREF_THEME_MODE = "theme_mode"
+        private const val BANNER_TRANSITION_DURATION_MS = 260L
     }
 }

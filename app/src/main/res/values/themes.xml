@@ -46,6 +46,10 @@
         <item name="android:textColor">?attr/colorPrimary</item>
     </style>
 
+    <style name="TextAppearance.GAP.LsposedBanner" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">?attr/colorOnErrorContainer</item>
+    </style>
+
     <style name="TextAppearance.GAP.PackageName" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:fontFamily">monospace</item>
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
@@ -59,6 +63,10 @@
 
     <style name="Widget.GAP.LinearProgressIndicator" parent="Widget.Material3.LinearProgressIndicator">
         <item name="trackCornerRadius">2dp</item>
+    </style>
+
+    <style name="Widget.GAP.LsposedActivationBanner" parent="Widget.Material3.CardView.Filled">
+        <item name="shapeAppearance">@style/ShapeAppearance.GAP.CornerLarge</item>
     </style>
 
     <style name="Widget.GAP.PackageCard" parent="Widget.Material3.CardView.Filled">
