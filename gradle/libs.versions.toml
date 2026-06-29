@@ -3,7 +3,7 @@ agp = "9.2.1"
 kotlin = "2.4.0"
 annotation = "1.10.0"
 
-libxposedApi = "101.0.1"
+libxposedApi = "102.0.0"
 libxposedService = "101.0.0"
 
 [libraries]
