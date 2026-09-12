@@ -71,6 +71,8 @@ class MainHook : XposedModule() {
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
         runCatching {
             HookScope(this, param.classLoader).applySystemHooks()
+        }.onSuccess {
+            detach()
         }.onFailure {
             log(Log.ERROR, TAG, "Failed to install system_server hooks", it)
         }
@@ -88,6 +90,8 @@ class MainHook : XposedModule() {
         }
         runCatching {
             HookScope(this, param.classLoader).applyGameHelperHooks()
+        }.onSuccess {
+            detach()
         }.onFailure {
             log(Log.ERROR, TAG, "Failed to install Game Helper hooks", it)
         }
