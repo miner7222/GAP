@@ -18,13 +18,13 @@ class XposedMetadataTest {
     }
 
     @Test
-    fun declaresApi101StaticScopeModuleProperties() {
+    fun declaresApi102StaticScopeModuleProperties() {
         val properties = Properties().apply {
             resourceFile("META-INF/xposed/module.prop").inputStream().use(::load)
         }
 
-        assertEquals("101", properties.getProperty("minApiVersion"))
-        assertEquals("101", properties.getProperty("targetApiVersion"))
+        assertEquals("102", properties.getProperty("minApiVersion"))
+        assertEquals("102", properties.getProperty("targetApiVersion"))
         assertEquals("true", properties.getProperty("staticScope"))
     }
 
