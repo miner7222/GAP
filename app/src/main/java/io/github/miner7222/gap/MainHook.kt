@@ -19,6 +19,8 @@ class MainHook : XposedModule() {
     private val gameHooksInstalled = AtomicBoolean(false)
     @Volatile
     private var cachedGameHelperClassLoader: ClassLoader? = null
+    @Volatile
+    private var moduleProcessName: String = ""
     private val lsrRuntime = LsrRuntime()
     private val superResolutionRuntime = SuperResolutionRuntime(
         resolveSystemContext = lsrRuntime::resolveSystemContext,
@@ -60,6 +62,7 @@ class MainHook : XposedModule() {
     )
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
+        moduleProcessName = param.processName
         AndroidInternals.log(
             "Loaded GAP module in ${param.processName}, framework=$frameworkName($frameworkVersionCode), api=$apiVersion",
         )
@@ -75,6 +78,12 @@ class MainHook : XposedModule() {
 
     override fun onPackageReady(param: PackageReadyParam) {
         if (param.packageName != GAME_HELPER_PACKAGE || !param.isFirstPackage) {
+            return
+        }
+        // LSPosed injects the module into every process of the scoped package.
+        // Game Helper also declares :mpAcc, :metric, :report and :preRegister
+        // processes which do not need these hooks.
+        if (moduleProcessName != GAME_HELPER_PACKAGE) {
             return
         }
         runCatching {
