@@ -302,9 +302,14 @@ object PackageManagerController {
             |
             |# service.sh also performs this bind on boot, but GAP reapplies it
             |# immediately so the change takes effect without a reboot.
+            |# KernelSU gives app-spawned root shells their own mount namespace, so
+            |# perform the bind/unbind in init's namespace when possible.
             |unbind_active_list() {
-            |  if grep -q ' /system/etc/gpp_app_list ' /proc/mounts; then
-            |    umount /system/etc/gpp_app_list 2>/dev/null || umount -l /system/etc/gpp_app_list 2>/dev/null || true
+            |  if grep -q ' /system/etc/gpp_app_list ' /proc/1/mounts 2>/dev/null; then
+            |    nsenter -t 1 -m -- umount /system/etc/gpp_app_list 2>/dev/null \
+            |      || umount /system/etc/gpp_app_list 2>/dev/null \
+            |      || umount -l /system/etc/gpp_app_list 2>/dev/null \
+            |      || true
             |  fi
             |}
             |
@@ -314,9 +319,9 @@ object PackageManagerController {
             |  if [ ! -f "${'$'}SOURCE_LIST" ]; then
             |    SOURCE_LIST='${SupportedPackageList.RUNTIME_LIST_PATH}'
             |  fi
-            |  if ! mount -o bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list 2>/dev/null; then
-            |    mount --bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list
-            |  fi
+            |  nsenter -t 1 -m -- mount -o bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list 2>/dev/null \
+            |    || mount -o bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list 2>/dev/null \
+            |    || mount --bind "${'$'}SOURCE_LIST" /system/etc/gpp_app_list
             |}
             |
             |$activateList
@@ -377,7 +382,7 @@ object PackageManagerController {
             |# Restart the GPP userspace so it re-reads the active whitelist and
             |# startup-only FRC property, then force-stop Game Helper to drop any
             |# cached state tied to the old list.
-            |if [ "${'$'}SOC_MODEL" = 'SM8850P' ]; then
+            |if [ "${'$'}SOC_MODEL" = 'SM8850P' ] || [ "${'$'}SOC_MODEL" = 'SM8850' ]; then
             |  restart_native_gppservice
             |elif [ "${'$'}SOC_MODEL" = 'SM8750P' ]; then
             |  restart_compat_gppservice

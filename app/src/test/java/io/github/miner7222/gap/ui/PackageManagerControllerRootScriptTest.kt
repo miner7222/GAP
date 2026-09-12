@@ -20,11 +20,21 @@ class PackageManagerControllerRootScriptTest {
     }
 
     @Test
-    fun saveScriptRestartsNativeGppServiceOnSm8850pInsteadOfStartingDuplicateDaemon() {
+    fun saveScriptPerformsWhitelistMountInInitMountNamespace() {
+        val script = buildRootScript(useOverlay = true)
+
+        assertTrue(script.contains("nsenter -t 1 -m -- mount -o bind"))
+        assertTrue(script.contains("nsenter -t 1 -m -- umount"))
+        assertTrue(script.contains("grep -q ' /system/etc/gpp_app_list ' /proc/1/mounts"))
+    }
+
+    @Test
+    fun saveScriptRestartsNativeGppServiceOnSm8850pAndSm8850InsteadOfStartingDuplicateDaemon() {
         val script = buildRootScript(useOverlay = true)
 
         assertTrue(script.contains("SOC_MODEL=\"$(getprop ro.soc.model"))
         assertTrue(script.contains("[ \"${'$'}SOC_MODEL\" = 'SM8850P' ]"))
+        assertTrue(script.contains("[ \"${'$'}SOC_MODEL\" = 'SM8850' ]"))
         assertTrue(script.contains("stop vendor.gppservice"))
         assertTrue(script.contains("start vendor.gppservice"))
         assertTrue(script.contains("[ \"${'$'}SOC_MODEL\" = 'SM8750P' ]"))
