@@ -104,8 +104,18 @@ internal class HookScope(
     ) {
         val executable = resolveExecutable(className, methodName, parameterTypes, parameterCount)
         module.hook(executable)
+            .setId(buildHookId(className, methodName, parameterTypes, parameterCount))
             .setExceptionMode(ExceptionMode.PROTECTIVE)
             .intercept(block)
+    }
+
+    private fun buildHookId(
+        className: String,
+        methodName: String,
+        parameterTypes: Array<out Class<*>>?,
+        parameterCount: Int?,
+    ): String {
+        return "$className#$methodName/${describeParameters(parameterTypes, parameterCount)}"
     }
 
     private fun resolveExecutable(
