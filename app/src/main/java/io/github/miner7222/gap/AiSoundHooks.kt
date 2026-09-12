@@ -33,9 +33,11 @@ internal class AiSoundHooks(
     }
 
     private fun HookScope.hookAiSoundToggleHandler() {
-        val className = "com.zui.game.service.sys.item.ItemAISoundEnhancement\$initFromSavedState\$1"
-        if (!hasMethodWithParamCount(className, "onNoClick", 0)) {
-            AndroidInternals.log("Skip missing $className#onNoClick/0 in Game Helper")
+        val className = AI_SOUND_TOGGLE_HANDLER_CLASSES.firstOrNull { candidate ->
+            hasMethodWithParamCount(candidate, "onNoClick", 0)
+        }
+        if (className == null) {
+            AndroidInternals.log("Skip missing AI sound toggle handler in Game Helper")
             return
         }
 
@@ -83,5 +85,13 @@ internal class AiSoundHooks(
 
             aiSoundRuntime.readSetting(context, defaultValue = 1) == 1 && aiSoundRuntime.isFeatureOpened()
         }
+    }
+
+    private companion object {
+        // The compiled lambda class suffix changed between Game Helper builds.
+        private val AI_SOUND_TOGGLE_HANDLER_CLASSES = listOf(
+            "com.zui.game.service.sys.item.ItemAISoundEnhancement\$initFromSavedState\$1",
+            "com.zui.game.service.sys.item.ItemAISoundEnhancement\$initFromSavedState\$2",
+        )
     }
 }

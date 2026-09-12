@@ -4,7 +4,7 @@ import android.content.Context
 
 internal class RomFeatureHooks(
     private val romFeatureRuntime: RomFeatureRuntime,
-    private val isBaldurBoard: () -> Boolean,
+    private val isColorfulLightSupported: () -> Boolean,
 ) {
     fun install(scope: HookScope) {
         with(scope) {
@@ -91,14 +91,14 @@ internal class RomFeatureHooks(
         )
 
         replaceMethod("com.zui.ugame.gamesetting.feature.FEATURE_COLORFUL_LIGHT", "isEnable", Context::class.java) {
-            isBaldurBoard()
+            isColorfulLightSupported()
         }
         replaceMethod(
             "com.zui.ugame.gamesetting.feature.FEATURE_COLORFUL_LIGHT",
             "onPreferenceTreeClick",
             parameterCount = 3,
         ) {
-            if (isBaldurBoard()) callOriginal() else false
+            if (isColorfulLightSupported()) callOriginal() else false
         }
     }
 }

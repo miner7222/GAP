@@ -4,7 +4,7 @@ import android.content.Context
 
 internal class FloatingBarRuntime(
     private val resolveGameHelperClassLoader: () -> ClassLoader?,
-    private val isBaldurBoard: () -> Boolean,
+    private val isColorfulLightSupported: () -> Boolean,
     private val shouldExposeSuperResolution: (String) -> Boolean,
 ) {
     fun normalizeItems(controller: Any?, source: String) {
@@ -16,7 +16,7 @@ internal class FloatingBarRuntime(
         currentItems.forEach { item ->
             val key = resolveItemKey(item)
             when {
-                key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard() -> return@forEach
+                key == COLORFUL_LIGHT_FEATURE_KEY && !isColorfulLightSupported() -> return@forEach
                 key == SUPER_RESOLUTION_FEATURE_KEY && !shouldExposeSuperResolution(packageName) -> return@forEach
                 key == FOUR_D_VIBRATE_FEATURE_KEY &&
                     !shouldExposeFourDVibration(controller, packageName) -> return@forEach

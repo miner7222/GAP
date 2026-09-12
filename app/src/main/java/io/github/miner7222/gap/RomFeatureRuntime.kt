@@ -5,13 +5,13 @@ import java.util.LinkedHashSet
 
 internal class RomFeatureRuntime(
     private val resolveGameHelperClassLoader: () -> ClassLoader?,
-    private val isBaldurBoard: () -> Boolean,
+    private val isColorfulLightSupported: () -> Boolean,
 ) {
     fun resolveFeatureOpen(featureKey: String?, callOriginal: () -> Any?): Any? {
         return when (featureKey) {
             SUPER_RESOLUTION_FEATURE_KEY -> true
             FOUR_D_VIBRATE_FEATURE_KEY -> true
-            COLORFUL_LIGHT_FEATURE_KEY -> isBaldurBoard()
+            COLORFUL_LIGHT_FEATURE_KEY -> isColorfulLightSupported()
             else -> callOriginal()
         }
     }
@@ -24,7 +24,7 @@ internal class RomFeatureRuntime(
         val normalized = LinkedHashSet<String>()
 
         keys.forEach { key ->
-            if (key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard()) return@forEach
+            if (key == COLORFUL_LIGHT_FEATURE_KEY && !isColorfulLightSupported()) return@forEach
             normalized += key
         }
 
@@ -59,7 +59,7 @@ internal class RomFeatureRuntime(
             if (featureKey == null) return@forEach
             val key = runCatching { ReflectCompat.callMethod(featureKey, "getKey") as? String }.getOrNull()
                 ?: return@forEach
-            if (key == COLORFUL_LIGHT_FEATURE_KEY && !isBaldurBoard()) return@forEach
+            if (key == COLORFUL_LIGHT_FEATURE_KEY && !isColorfulLightSupported()) return@forEach
             normalized[key] = featureKey
         }
 
@@ -101,14 +101,14 @@ internal class RomFeatureRuntime(
     }
 
     fun normalizeGameSettingFeatureList(features: List<Any?>): List<Any?> {
-        if (isBaldurBoard()) return features
+        if (isColorfulLightSupported()) return features
         return features.filterNot {
             resolveGameSettingFeatureKey(it) == GAME_HELPER_COLORFUL_LIGHT_PREFERENCE_KEY
         }
     }
 
     fun removeColorfulLightPreference(fragment: Any?) {
-        if (isBaldurBoard()) return
+        if (isColorfulLightSupported()) return
 
         runCatching {
             ReflectCompat.callMethod(

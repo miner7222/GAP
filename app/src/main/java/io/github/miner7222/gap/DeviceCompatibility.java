@@ -13,6 +13,7 @@ public final class DeviceCompatibility {
     public static final String SOC_MODEL_PROPERTY = "ro.soc.model";
     public static final String SUPPORTED_SOC_SM8750P = "SM8750P";
     public static final String NATIVE_LSR_SOC_SM8850P = "SM8850P";
+    public static final String SUPPORTED_SOC_SM8850 = "SM8850";
 
     private static final int[] MINIMUM_ZUI_VERSION = {17, 0};
     private static final Pattern VERSION_NUMBER_PATTERN = Pattern.compile("\\d+");
@@ -54,7 +55,9 @@ public final class DeviceCompatibility {
 
     public static boolean isSupportedSoc(@Nullable String value) {
         String socModel = normalizeSocModel(value);
-        return SUPPORTED_SOC_SM8750P.equals(socModel) || NATIVE_LSR_SOC_SM8850P.equals(socModel);
+        return SUPPORTED_SOC_SM8750P.equals(socModel)
+            || NATIVE_LSR_SOC_SM8850P.equals(socModel)
+            || SUPPORTED_SOC_SM8850.equals(socModel);
     }
 
     public static boolean hasNativeLsrService(@Nullable String value) {

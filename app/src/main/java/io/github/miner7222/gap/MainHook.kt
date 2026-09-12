@@ -31,7 +31,7 @@ class MainHook : XposedModule() {
     )
     private val floatingBarRuntime = FloatingBarRuntime(
         resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
-        isBaldurBoard = ::isBaldurBoard,
+        isColorfulLightSupported = AndroidInternals::supportsColorfulLight,
         shouldExposeSuperResolution = { packageName -> superResolutionRuntime.shouldExpose(packageName) },
     )
     private val superResolutionStateRuntime = SuperResolutionStateRuntime(
@@ -45,11 +45,11 @@ class MainHook : XposedModule() {
     )
     private val romFeatureRuntime = RomFeatureRuntime(
         resolveGameHelperClassLoader = ::resolveGameHelperClassLoader,
-        isBaldurBoard = ::isBaldurBoard,
+        isColorfulLightSupported = AndroidInternals::supportsColorfulLight,
     )
     private val romFeatureHooks = RomFeatureHooks(
         romFeatureRuntime = romFeatureRuntime,
-        isBaldurBoard = ::isBaldurBoard,
+        isColorfulLightSupported = AndroidInternals::supportsColorfulLight,
     )
     private val aiSoundHooks = AiSoundHooks(
         aiSoundRuntime = aiSoundRuntime,
@@ -124,8 +124,10 @@ class MainHook : XposedModule() {
             AndroidInternals.log("Using stock/native lenovosr; compatibility fallback binder disabled")
         }
 
-        if (!isBaldurBoard()) {
-            // Make Game Helper follow the Baldur feature path on non-Baldur devices.
+        if (AndroidInternals.useCompatibilityLsr()) {
+            // Make Game Helper follow the Baldur feature path on compatibility
+            // devices. Native LSR boards (Baldur/Wuji) keep their own device
+            // feature selection instead.
             replaceMethodWithTrue("com.zui.util.DeviceUtils", "isBaldur")
         }
 
@@ -143,10 +145,6 @@ class MainHook : XposedModule() {
         gameEnhancementHooks.install(this)
 
         AndroidInternals.log("Installed modern Xposed game helper hooks")
-    }
-
-    private fun isBaldurBoard(): Boolean {
-        return AndroidInternals.isBaldurBoard()
     }
 
     private fun resolveGameHelperClassLoader(): ClassLoader? {

@@ -44,6 +44,10 @@ class DeviceCompatibilityTest {
             DeviceCompatibility.evaluate("17.0", " sm8850p "),
         )
         assertEquals(
+            CompatibilityStatus.SUPPORTED,
+            DeviceCompatibility.evaluate("18.0", "sm8850"),
+        )
+        assertEquals(
             CompatibilityStatus.UNSUPPORTED_SOC,
             DeviceCompatibility.evaluate("17.0", "SM8550"),
         )

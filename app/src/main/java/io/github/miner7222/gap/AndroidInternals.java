@@ -12,6 +12,7 @@ public final class AndroidInternals {
     private static final boolean DEBUG = BuildConfig.DEBUG;
     private static final String PRODUCT_BOARD_PROPERTY = "ro.product.board";
     private static final String BALDUR_BOARD_MARKER = "baldur";
+    private static final String WUJI_BOARD_MARKER = "wuji";
 
     private AndroidInternals() {
     }
@@ -95,14 +96,28 @@ public final class AndroidInternals {
             .contains(BALDUR_BOARD_MARKER);
     }
 
+    public static boolean isWujiBoard() {
+        return getSystemProperty(PRODUCT_BOARD_PROPERTY, "")
+            .toLowerCase(Locale.ROOT)
+            .contains(WUJI_BOARD_MARKER);
+    }
+
     public static boolean hasNativeLsrService() {
         return DeviceCompatibility.hasNativeLsrService(
             getSystemProperty(DeviceCompatibility.SOC_MODEL_PROPERTY, "")
-        );
+        ) || isWujiBoard();
     }
 
     public static boolean useCompatibilityLsr() {
         return !isBaldurBoard() && !hasNativeLsrService();
+    }
+
+    /**
+     * Colorful light is supported by Baldur and Wuji Game Helper builds, so the
+     * hooks must leave the stock feature enabled on those boards.
+     */
+    public static boolean supportsColorfulLight() {
+        return isBaldurBoard() || isWujiBoard();
     }
 
     public static void log(String message) {
