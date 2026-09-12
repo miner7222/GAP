@@ -1,5 +1,6 @@
 package io.github.miner7222.gap
 
+import android.os.Bundle
 import android.util.Log
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
@@ -104,9 +105,34 @@ class MainHook : XposedModule() {
             }
         } else {
             AndroidInternals.log("Skipping compatibility lenovosr bootstrap hooks")
+            installNativeGppPacingHooks()
         }
 
         AndroidInternals.log("Installed modern Xposed system_server hooks")
+    }
+
+    /**
+     * TB324 (Wuji) lowers the GFRC source fps hint to 60 whenever Super
+     * Resolution is enabled, which pins the interpolated output to 120 Hz.
+     * Keep the session library default (83 fps -> ~165 Hz) instead so SR + FI
+     * runs at the faster cadence.
+     */
+    private fun HookScope.installNativeGppPacingHooks() {
+        if (!AndroidInternals.isWujiBoard()) return
+
+        val className = "com.zui.server.lsr.LsrService\$BinderService"
+        val methodName = "switchOnOffGameSR"
+        if (!hasMethodWithParamCount(className, methodName, 1)) {
+            AndroidInternals.log("Skip missing $className#$methodName/1 in system_server")
+            return
+        }
+
+        afterMethod(className, methodName, parameterCount = 1) {
+            val enabled = (args.firstOrNull() as? Bundle)?.getBoolean("switchOnOff", false) ?: false
+            if (enabled) {
+                AndroidInternals.setSystemProperty("vendor.gpp.limit_fps", "83")
+            }
+        }
     }
 
     private fun HookScope.applyGameHelperHooks() {
