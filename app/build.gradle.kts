@@ -126,7 +126,7 @@ fun String.normalizeMetadata(): String = replace("\r\n", "\n").trim()
 
 dependencies {
     implementation(libs.androidx.annotation)
-    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.appcompat:appcompat:1.8.0")
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0")
